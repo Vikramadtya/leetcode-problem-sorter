@@ -1,0 +1,64 @@
+.statsCard {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.statsGrid {
+  display: flex;
+  padding: 1.5rem;
+  align-items: center;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.divider {
+  width: 1px;
+  height: 40px;
+  background-color: var(--border-color);
+}
+
+.solvedText { color: var(--success); }
+.unsolvedText { color: var(--text-muted); }
+.easyText { color: var(--success); }
+.mediumText { color: var(--warning); }
+.hardText { color: var(--danger); }

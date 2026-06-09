@@ -1,0 +1,153 @@
+.tableContainer {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.th {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+}
+
+.thLeft, .tdLeft { text-align: left; }
+.thCenter, .tdCenter { text-align: center; }
+.thRight, .tdRight { text-align: right; }
+
+.td {
+  padding: 1rem 1.5rem;
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.15s;
+}
+
+.row:hover, .rowSolved:hover {
+  background-color: var(--bg-main);
+}
+
+.rowSolved td {
+  color: var(--text-muted);
+}
+
+.idText {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.titleText {
+  font-weight: 500;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowSolved .titleText {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 0.2s;
+}
+
+.link:hover {
+  color: var(--primary);
+}
+
+.externalIcon {
+  color: var(--text-muted);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.diffEasy { background-color: var(--diff-easy-bg); color: var(--diff-easy-text); }
+.diffMedium { background-color: var(--diff-med-bg); color: var(--diff-med-text); }
+.diffHard { background-color: var(--diff-hard-bg); color: var(--diff-hard-text); }
+
+.dateText {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+}
+
+.checkboxBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: all 0.2s;
+}
+
+.checkboxBtn:hover {
+  border-color: var(--success);
+}
+
+.checkboxBtn.checked {
+  background-color: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.reviseBtn {
+  color: var(--text-muted);
+  transition: color 0.2s, transform 0.2s;
+}
+
+.reviseBtn:hover {
+  color: var(--warning);
+  transform: scale(1.1);
+}
+
+.reviseActive {
+  color: var(--warning);
+}
+
+.emptyState {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.sortable:hover {
+  background-color: var(--bg-main);
+}
+
+.sortIcon {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-size: 0.8rem;
+  opacity: 0.6;
+}

@@ -1,66 +1,190 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useSession, signIn } from 'next-auth/react';
+import Header from './components/Header';
+import Filters from './components/Filters';
+import StatsBar from './components/StatsBar';
+import Table from './components/Table';
+import styles from './page.module.css';
 
 export default function Home() {
+  const { data: session } = useSession();
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState('all');
+  const [questions, setQuestions] = useState([]);
+  const [progress, setProgress] = useState({});
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        setAuthEnabled(data.authEnabled);
+      });
+
+    fetch('/api/companies')
+      .then(res => res.json())
+      .then(data => {
+        if (data.companies) {
+          setCompanies(data.companies);
+          if (data.companies.includes('1kosmos')) {
+            setSelectedCompany('1kosmos');
+            setSelectedPeriod('more-than-six-months');
+          } else if (data.companies.length > 0) {
+            setSelectedCompany(data.companies[0]);
+          }
+        }
+      });
+      
+    fetch('/api/progress')
+      .then(res => res.json())
+      .then(data => {
+        if (data.progress) setProgress(data.progress);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (selectedCompany) {
+      fetch(`/api/questions?company=${selectedCompany}&period=${selectedPeriod}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.questions) setQuestions(data.questions);
+        });
+    }
+  }, [selectedCompany, selectedPeriod]);
+
+  const handleToggleStatus = (id) => {
+    if (!session) {
+      signIn('google');
+      return;
+    }
+
+    const isSolved = progress[id]?.solved;
+    const newSolved = !isSolved;
+    const newDate = newSolved ? new Date().toISOString() : null;
+    
+    const updates = { solved: newSolved, dateSolved: newDate };
+    
+    // Optimistic update
+    setProgress(prev => ({
+      ...prev,
+      [id]: { ...prev[id], ...updates }
+    }));
+
+    fetch('/api/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, updates })
+    });
+  };
+
+  const handleToggleRevise = (id) => {
+    if (!session) {
+      signIn('google');
+      return;
+    }
+
+    const isRevise = progress[id]?.revise;
+    const updates = { revise: !isRevise };
+    
+    setProgress(prev => ({
+      ...prev,
+      [id]: { ...prev[id], ...updates }
+    }));
+
+    fetch('/api/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, updates })
+    });
+  };
+
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const processedQuestions = [...questions].filter(q => {
+    if (difficultyFilter !== 'all') {
+      return q.Difficulty?.toLowerCase() === difficultyFilter.toLowerCase();
+    }
+    return true;
+  }).sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    
+    let aVal = a[sortConfig.key];
+    let bVal = b[sortConfig.key];
+    
+    if (sortConfig.key === 'Difficulty') {
+      const order = { 'easy': 1, 'medium': 2, 'hard': 3 };
+      aVal = order[aVal?.toLowerCase()] || 0;
+      bVal = order[bVal?.toLowerCase()] || 0;
+    } else if (sortConfig.key === 'Acceptance %' || sortConfig.key === 'Frequency %') {
+      aVal = parseFloat(aVal?.replace('%', '')) || 0;
+      bVal = parseFloat(bVal?.replace('%', '')) || 0;
+    }
+    
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Calculate stats based on processedQuestions or original questions?
+  // Usually stats show total available in the dataset before sort/filter, 
+  // but showing them for processed is fine too. Let's do original so it stays constant.
+  const stats = {
+    solved: 0,
+    unsolved: 0,
+    easy: 0,
+    medium: 0,
+    hard: 0
+  };
+
+  questions.forEach(q => {
+    const isSolved = progress[q.ID]?.solved;
+    if (isSolved) stats.solved++;
+    else stats.unsolved++;
+
+    const diff = q.Difficulty?.toLowerCase();
+    if (diff === 'easy') stats.easy++;
+    else if (diff === 'medium') stats.medium++;
+    else if (diff === 'hard') stats.hard++;
+  });
+
   return (
-    <div className={styles.page}>
+    <div className={styles.container}>
+      <Header authEnabled={authEnabled} />
       <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+        <Filters 
+          companies={companies}
+          selectedCompany={selectedCompany}
+          setSelectedCompany={setSelectedCompany}
+          selectedPeriod={selectedPeriod}
+          setSelectedPeriod={setSelectedPeriod}
+          difficultyFilter={difficultyFilter}
+          setDifficultyFilter={setDifficultyFilter}
         />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.js file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        <StatsBar stats={stats} total={questions.length} />
+        <Table 
+          questions={processedQuestions}
+          progress={progress}
+          onToggleStatus={handleToggleStatus}
+          onToggleRevise={handleToggleRevise}
+          authEnabled={authEnabled}
+          sortConfig={sortConfig}
+          requestSort={requestSort}
+        />
       </main>
+      <footer className={styles.footer}>
+        Made with <span className={styles.heart}>❤️</span> for the community. • Contact Us
+      </footer>
     </div>
   );
 }
