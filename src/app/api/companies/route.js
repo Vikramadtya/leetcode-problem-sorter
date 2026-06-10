@@ -16,6 +16,8 @@ export async function GET() {
       .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('.'))
       .map(dirent => dirent.name);
     
+    companies.unshift('Custom Questions'); // Add at the top
+
     cachedCompanies = companies;
     return NextResponse.json({ companies });
   } catch (error) {

@@ -40,12 +40,36 @@
   margin-bottom: 2rem;
 }
 
-.summaryCard {
-  background-color: var(--bg-card);
+.motivationBanner {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
+  margin-bottom: 2rem;
+}
+
+.motivationBanner h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.motivationBanner p {
+  font-size: 1rem;
+  color: var(--text-main);
+  line-height: 1.5;
+  margin: 0.25rem 0;
+}
+
+.summaryCard {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  padding: 1.5rem;
+  border-radius: var(--radius-xl);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-md);
 }
 
 .summaryCard h3 {
@@ -99,11 +123,13 @@
 }
 
 .chartCard {
-  background-color: var(--bg-card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   padding: 1.5rem;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-xl);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
 }

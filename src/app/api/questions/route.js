@@ -26,9 +26,21 @@ export async function GET(request) {
     return NextResponse.json({ questions: questionsCache.get(cacheKey) });
   }
 
-  const csvPath = path.join(process.cwd(), '.data', 'questions', company, `${period}.csv`);
-
   try {
+    if (company === 'all') {
+      const globalPath = path.join(process.cwd(), '.data', 'global_questions.json');
+      if (fs.existsSync(globalPath)) {
+        const fileContent = fs.readFileSync(globalPath, 'utf-8');
+        const globalData = JSON.parse(fileContent);
+        const allQuestions = Object.values(globalData);
+        questionsCache.set(cacheKey, allQuestions);
+        return NextResponse.json({ questions: allQuestions });
+      } else {
+        return NextResponse.json({ questions: [] });
+      }
+    }
+
+    const csvPath = path.join(process.cwd(), '.data', 'questions', company, `${period}.csv`);
     if (!fs.existsSync(csvPath)) {
       return NextResponse.json({ questions: [] });
     }

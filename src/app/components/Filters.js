@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import styles from './Filters.module.css';
 
 export default function Filters({ 
@@ -7,12 +8,33 @@ export default function Filters({
   selectedPeriod, 
   setSelectedPeriod,
   difficultyFilter,
-  setDifficultyFilter
+  setDifficultyFilter,
+  searchQuery,
+  setSearchQuery,
+  hideSolved,
+  setHideSolved,
+  visibleColumns,
+  toggleColumn,
+  starredOnly,
+  setStarredOnly
 }) {
+  const [showColMenu, setShowColMenu] = useState(false);
+  const allColumns = ['ID', 'Title', 'Difficulty', 'Attempts', 'Time', 'Acceptance %', 'Frequency %', 'DateSolved'];
   return (
     <div className={styles.filtersCard}>
       <h2 className={styles.title}>Select Questions Source</h2>
       <div className={styles.grid}>
+        <div className={styles.inputGroup}>
+          <label className={styles.label}>Search</label>
+          <input 
+            type="text" 
+            className={styles.searchInput}
+            placeholder="Search problems..."
+            value={searchQuery || ''}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        
         <div className={styles.inputGroup}>
           <label className={styles.label}>Company</label>
           <div className={styles.selectWrapper}>
@@ -21,9 +43,8 @@ export default function Filters({
               value={selectedCompany} 
               onChange={(e) => setSelectedCompany(e.target.value)}
             >
-              <option value="" disabled>Select a company</option>
               {companies.map(c => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>{c === 'all' ? 'All Companies' : c}</option>
               ))}
             </select>
             <div className={styles.chevron}>
@@ -70,6 +91,54 @@ export default function Filters({
           </div>
         </div>
       </div>
+      {setHideSolved && (
+        <div className={styles.filterRow} style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <label className={styles.filterCheckbox}>
+            <input 
+              type="checkbox" 
+              checked={hideSolved} 
+              onChange={(e) => setHideSolved(e.target.checked)} 
+            />
+            Hide Solved
+          </label>
+          
+          {setStarredOnly && (
+            <label className={styles.filterCheckbox}>
+              <input 
+                type="checkbox" 
+                checked={starredOnly} 
+                onChange={(e) => setStarredOnly(e.target.checked)} 
+              />
+              Starred
+            </label>
+          )}
+
+          {visibleColumns && (
+            <div style={{ position: 'relative' }}>
+              <button 
+                onClick={() => setShowColMenu(!showColMenu)}
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+              >
+                Columns ⚙️
+              </button>
+              {showColMenu && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '0.5rem', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1rem', zIndex: 100, display: 'grid', gap: '0.5rem', boxShadow: 'var(--shadow-md)', minWidth: '150px' }}>
+                  {allColumns.map(col => (
+                    <label key={col} className={styles.filterCheckbox} style={{ margin: 0 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={visibleColumns.includes(col)}
+                        onChange={() => toggleColumn(col)}
+                      />
+                      {col}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import Header from '../components/Header';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
-  AreaChart, Area
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
+import Heatmap from '../components/Heatmap';
 import styles from './page.module.css';
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
@@ -78,6 +78,22 @@ export default function Dashboard() {
       <main className={styles.main}>
         <h1 className={styles.title}>Your Preparation Insights</h1>
         
+        {analytics && (
+          <div className={styles.motivationBanner}>
+            <h3>AI Coach</h3>
+            <p>
+              {analytics.totalRevise === 0 
+                ? "🌟 Your revision queue is completely clear! Great job. Time to learn something new or tackle a hard problem."
+                : `🎯 You have ${analytics.totalRevise} problems due for revision. Knock them out to solidify your memory.`}
+            </p>
+            {analytics.patternMasteryData && analytics.patternMasteryData.length > 0 && (
+              <p>
+                💪 You are strongest in <strong>{analytics.patternMasteryData[0].name}</strong> with a {analytics.patternMasteryData[0].score}% mastery. Keep it up!
+              </p>
+            )}
+          </div>
+        )}
+        
         <div className={styles.summaryGrid}>
           <div className={styles.summaryCard}>
             <h3>Total Solved</h3>
@@ -88,7 +104,7 @@ export default function Dashboard() {
             <p className={styles.percent}>{completionPercent}% Completion</p>
           </div>
           <div className={styles.summaryCard}>
-            <h3>Revision Queue</h3>
+            <h3>Due Revisions</h3>
             <p className={styles.metric}>{analytics.totalRevise}</p>
             <p className={styles.subtext}>Problems flagged for review</p>
           </div>
@@ -144,41 +160,89 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+
+          <div className={styles.chartCard}>
+            <h3>Platforms Breakdown</h3>
+            <div className={styles.chartWrapper}>
+              {analytics.platformsBreakdown && analytics.platformsBreakdown.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analytics.platformsBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="count"
+                      nameKey="name"
+                    >
+                      {analytics.platformsBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
+                      itemStyle={{ color: 'var(--text-main)' }}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className={styles.emptyChart}>No platform data yet.</div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className={styles.bottomGrid}>
           <div className={styles.chartCard}>
-            <h3>Activity Timeline</h3>
+            <h3>Average Time per Difficulty</h3>
             <div className={styles.chartWrapper}>
-              {analytics.activityTimeline && analytics.activityTimeline.length > 0 ? (
+              {analytics.avgTimePerDiff && analytics.avgTimePerDiff.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analytics.activityTimeline} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="date" stroke="var(--text-muted)" tickFormatter={(tick) => {
-                      const d = new Date(tick);
-                      return `${d.getMonth()+1}/${d.getDate()}`;
-                    }} />
-                    <YAxis stroke="var(--text-muted)" allowDecimals={false} />
+                  <BarChart data={analytics.avgTimePerDiff} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis dataKey="name" stroke="var(--text-muted)" />
+                    <YAxis stroke="var(--text-muted)" label={{ value: 'Minutes', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)' }} />
                     <Tooltip 
+                      cursor={{fill: 'var(--bg-main)'}}
                       contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
                     />
-                    <Area type="monotone" dataKey="count" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCount)" />
-                  </AreaChart>
+                    <Bar dataKey="avgMinutes" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className={styles.emptyChart}>No activity found yet. Start solving!</div>
+                <div className={styles.emptyChart}>No time tracking data yet.</div>
               )}
             </div>
           </div>
 
           <div className={styles.chartCard}>
-            <h3>Revision Queue</h3>
+            <h3>Pattern Mastery</h3>
+            <div className={styles.chartWrapper}>
+              {analytics.patternMasteryData && analytics.patternMasteryData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics.patternMasteryData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
+                    <XAxis type="number" domain={[0, 100]} stroke="var(--text-muted)" />
+                    <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
+                    <Tooltip 
+                      cursor={{fill: 'var(--bg-main)'}}
+                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
+                      formatter={(value) => [`${value}%`, 'Mastery Score']}
+                    />
+                    <Bar dataKey="score" fill="var(--success)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className={styles.emptyChart}>Solve and tag problems with patterns to see mastery!</div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+            <h3>Due Revisions</h3>
             <div className={styles.revisionList}>
               {analytics.revisionList && analytics.revisionList.length > 0 ? (
                 <ul className={styles.revList}>

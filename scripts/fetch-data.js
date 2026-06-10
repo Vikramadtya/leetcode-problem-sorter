@@ -41,9 +41,12 @@ try {
 
           if (!globalQuestions[id]) {
             globalQuestions[id] = {
-              id: id,
-              title: record['Title'] || record[' Title'] || '',
-              difficulty: record['Difficulty'] || record[' Difficulty'] || 'Unknown',
+              'ID': id,
+              'Title': record['Title'] || record[' Title'] || '',
+              'Difficulty': record['Difficulty'] || record[' Difficulty'] || 'Unknown',
+              'Acceptance %': record['Acceptance %'] || record[' Acceptance %'] || '',
+              'Frequency %': record['Frequency %'] || record[' Frequency %'] || '',
+              'Leetcode Question Link': record['Leetcode Question Link'] || record[' Leetcode Question Link'] || '',
               companies: []
             };
           }

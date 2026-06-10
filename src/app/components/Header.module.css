@@ -1,9 +1,31 @@
 .header {
-  background-color: var(--bg-card);
-  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: var(--glass-border);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 50;
+  box-shadow: var(--shadow-sm);
+}
+
+.brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand::before {
+  content: '⚡';
+  font-size: 1.2rem;
 }
 
 .container {

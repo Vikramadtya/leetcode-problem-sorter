@@ -4,8 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("POSTGRES_PRISMA_URL") // uses connection pooling
-  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+  url      = env("DATABASE_URL")
 }
 
 model Account {
@@ -44,6 +43,10 @@ model User {
   accounts      Account[]
   sessions      Session[]
   progress      Progress[]
+  customQuestions CustomQuestion[]
+  patterns       Pattern[]
+  platforms      Platform[]
+  tags           Tag[]
 }
 
 model VerificationToken {
@@ -55,14 +58,60 @@ model VerificationToken {
 }
 
 model Progress {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questionId String
-  solved     Boolean  @default(false)
-  revise     Boolean  @default(false)
-  dateSolved DateTime?
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId       String
+  solved           Boolean  @default(false)
+  revise           Boolean  @default(false)
+  dateSolved       DateTime?
+  confidenceLevel  Int?
+  nextRevisionDate DateTime?
+  tags             String?
+  notes            String?
+  pattern          String?
+  timeSpent        Int?
+  attempts         Int      @default(1)
+  updatedAt        DateTime @updatedAt
 
   @@unique([userId, questionId])
+}
+
+model CustomQuestion {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  link        String?
+  difficulty  String
+  platform    String?
+  pattern     String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Pattern {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Platform {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Tag {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
