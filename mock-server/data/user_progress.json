@@ -1,0 +1,20 @@
+{
+  "1": {
+    "status": "Unsolved",
+    "solved": true,
+    "confidenceLevel": 4,
+    "nextRevisionDate": "2026-06-17T14:25:57.737Z",
+    "attempts": 1,
+    "notes": "",
+    "pattern": "Dynamic Programming",
+    "solutionLink": "http://localhost:3000/explore",
+    "revise": false
+  },
+  "2": {
+    "status": "Attempted",
+    "attempts": 1
+  },
+  "4": {
+    "tags": "j, i"
+  }
+}

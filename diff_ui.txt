@@ -1,0 +1,574 @@
+--- old_ui.txt	2026-06-10 19:25:24
++++ new_ui.txt	2026-06-10 19:25:24
+@@ -1,305 +1,75 @@
+     return () => window.removeEventListener('keydown', handleKeyDown);
+-  }, [router]);
++  }, []);
+ 
+-  const handleStatusChange = (id, newStatus) => {
+-    if (!session) return;
+-    
+-    let updates = {};
+-    if (newStatus === 'Unsolved') {
+-      updates = {
+-        status: 'Unsolved',
+-        solved: false,
+-        dateSolved: null,
+-        confidenceLevel: null,
+-        nextRevisionDate: null,
+-        revise: false,
+-        attempts: 0,
+-        timeSpent: 0,
+-        tags: [],
+-        pattern: '',
+-        notes: ''
+-      };
+-    } else if (newStatus === 'Attempted') {
+-      updates = { 
+-        status: 'Attempted',
+-        solved: false
+-      };
+-    } else if (newStatus === 'Solved') {
+-      const confidenceLevel = progress[id]?.confidenceLevel || 3;
+-      const nextDate = new Date();
+-      nextDate.setDate(nextDate.getDate() + 5);
+-      const nextRevisionDate = progress[id]?.nextRevisionDate || nextDate.toISOString();
+-      const attempts = (progress[id]?.attempts || 0) + 1;
+-
+-      updates = { 
+-        status: 'Solved',
+-        solved: true, 
+-        dateSolved: new Date().toISOString(),
+-        confidenceLevel,
+-        nextRevisionDate,
+-        attempts
+-      };
+-    }
+-    
+-    setProgress(prev => ({
+-      ...prev,
+-      [id]: { ...prev[id], ...updates }
+-    }));
+-
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-  };
+-
+-  const handleSaveReflection = (id, { insight, pattern, memoryStrength }) => {
+-    if (!session) return;
+-    
+-    // Calculate new nextRevisionDate based on memoryStrength
+-    const intervals = { 1: 1, 2: 3, 3: 7, 4: 14 }; // 1d, 3d, 7d, 14d
+-    const days = intervals[memoryStrength] || 7;
+-    const nextDate = new Date();
+-    nextDate.setDate(nextDate.getDate() + days);
+-
+-    const updates = { 
+-      solved: true, 
+-      dateSolved: new Date().toISOString(), 
+-      confidenceLevel: memoryStrength, // Maps to 1-4
+-      nextRevisionDate: nextDate.toISOString(),
+-      attempts: (progress[id]?.attempts || 0) + 1,
+-      notes: insight ? (progress[id]?.notes ? progress[id].notes + '\n\n**Reflection:**\n' + insight : '**Reflection:**\n' + insight) : progress[id]?.notes,
+-      pattern: pattern || progress[id]?.pattern,
+-      revise: false
+-    };
+-
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-
+-    setActiveReflectionQ(null);
+-  };
+-
+   const handleSaveInitialSolve = (id, { solutionLink, notes, pattern, memoryStrength }) => {
+-    if (!session) return;
+-    
+-    const intervals = { 1: 1, 2: 3, 3: 7, 4: 14 }; // 1d, 3d, 7d, 14d
++    const intervals = { 1: 1, 2: 3, 3: 7, 4: 14 };
+     const days = intervals[memoryStrength] || 7;
+     const nextDate = new Date();
+     nextDate.setDate(nextDate.getDate() + days);
+ 
++    const q = questions.find(q => q.id === id);
+     const combinedNotes = solutionLink ? (notes ? `**Solution Link:** ${solutionLink}\n\n${notes}` : `**Solution Link:** ${solutionLink}`) : notes;
+ 
+-    const updates = { 
+-      solved: true, 
+-      dateSolved: new Date().toISOString(), 
+-      confidenceLevel: memoryStrength, 
++    updateProgress(id, {
++      status: 'Solved',
++      solved: true,
++      confidenceLevel: memoryStrength,
+       nextRevisionDate: nextDate.toISOString(),
+       attempts: 1,
+       notes: combinedNotes,
+-      pattern: pattern || progress[id]?.pattern,
+-      solutionLink: solutionLink || progress[id]?.solutionLink
+-    };
+-
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
++      pattern: pattern || q?.progress?.pattern,
++      solutionLink: solutionLink || q?.progress?.solutionLink,
++      dateSolved: new Date().toISOString()
+     });
+-
+     setActiveInitialSolveQ(null);
+   };
+ 
+-  const handleSetConfidence = (id, level) => {
+-    if (!session) return;
+-    const intervals = { 1: 1, 2: 3, 3: 5, 4: 7, 5: 14 };
+-    const days = intervals[level] || 5;
++  const handleSaveReflection = (id, { insight, pattern, memoryStrength }) => {
++    const intervals = { 1: 1, 2: 3, 3: 7, 4: 14 };
++    const days = intervals[memoryStrength] || 7;
+     const nextDate = new Date();
+     nextDate.setDate(nextDate.getDate() + days);
+ 
+-    const updates = { confidenceLevel: level, nextRevisionDate: nextDate.toISOString() };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
++    const q = questions.find(q => q.id === id);
++    const existingNotes = q?.progress?.notes || '';
++    const updatedNotes = insight ? (existingNotes ? existingNotes + '\n\n**Reflection:**\n' + insight : '**Reflection:**\n' + insight) : existingNotes;
+ 
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
++    updateProgress(id, {
++      confidenceLevel: memoryStrength,
++      nextRevisionDate: nextDate.toISOString(),
++      attempts: (q?.progress?.attempts || 0) + 1,
++      notes: updatedNotes,
++      pattern: pattern || q?.progress?.pattern,
++      revise: false
+     });
++    setActiveReflectionQ(null);
+   };
+ 
+-  const handleSetTags = (id, tagsString) => {
+-    if (!session) return;
+-    const updates = { tags: tagsString };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-  };
+-
+-  const handleSetPattern = (id, patternString) => {
+-    if (!session) return;
+-    const updates = { pattern: patternString };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-  };
+-
+   const handleOpenNotes = (q) => {
+     setActiveNotesQ(q);
+-    setNotesDraft(progress[q.ID]?.notes || '');
++    setNotesDraft(q.progress?.notes || '');
+     setIsEditingNotes(false);
+   };
+ 
+   const handleSaveNotes = () => {
+     if (!session || !activeNotesQ) return;
+-    const id = activeNotesQ.ID;
+-    const updates = { notes: notesDraft };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
++    updateProgress(activeNotesQ.id, { notes: notesDraft });
+     setIsEditingNotes(false);
+   };
+ 
+-  const handleSaveTime = (id, timeSpentSeconds) => {
+-    if (!session) return;
+-    const existingTime = progress[id]?.timeSpent || 0;
+-    const updates = { timeSpent: existingTime + timeSpentSeconds };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-  };
+-
+-  const handleSetAttempts = (id, newAttempts) => {
+-    if (!session) return;
+-    const updates = { attempts: newAttempts };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-  };
+-
+-  const handleToggleRevise = (id) => {
+-    if (!session) return;
+-    const isRevise = progress[id]?.revise;
+-    const updates = { revise: !isRevise };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
+-  };
+-
+-  const handleToggleImportant = (id) => {
+-    if (!session) return;
+-    const isImportant = progress[id]?.important;
+-    const updates = { important: !isImportant };
+-    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+-
+-    fetch('/api/progress', {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ id, updates })
+-    });
++  const openFlashcards = async () => {
++    try {
++      const response = await fetch(`${config.api.endpoint}/questions?reviseFilter=true&trackerMode=true&limit=1000`, {
++        headers: { Authorization: `Bearer ${session?.user?.id || 'mock-jwt'}` }
++      });
++      const data = await response.json();
++      setFlashcardQuestions(data.data || []);
++      setIsFlashcardOpen(true);
++    } catch (e) {
++      console.error(e);
++    }
+   };
+ 
+-  const requestSort = (key) => {
+-    let direction = 'asc';
+-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+-    setSortConfig({ key, direction });
+-  };
+-
+-  const processedQuestions = [...questions].filter(q => {
+-    const prog = progress[q.ID] || {};
+-    
+-    if (reviseFilter) {
+-      const isDue = prog.nextRevisionDate && new Date(prog.nextRevisionDate) <= new Date();
+-      if (!prog.revise && !isDue) return false;
+-    }
+-    
+-    const status = prog.status || (prog.solved ? 'Solved' : 'Unsolved');
+-    const isSolved = status === 'Solved';
+-    
+-    // Hide global questions that have been completely cleared of progress
+-    if (!q.isCustom) {
+-      const isAttempted = status === 'Attempted' || prog.attempts > 0;
+-      if (!isSolved && !isAttempted && !prog.important && !prog.revise) {
+-        return false;
+-      }
+-    }
+-
+-    if (hideSolved && isSolved) {
+-      return false;
+-    }
+-
+-    if (starredOnly && !prog.important) {
+-      return false;
+-    }
+-    
+-    if (difficultyFilter !== 'all' && (q.Difficulty || q[' Difficulty']) !== difficultyFilter) return false;
+-    
+-    if (searchQuery) {
+-      if (!q.Title?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+-    }
+-    if (tagFilter) {
+-      const qTags = progress[q.ID]?.tags?.toLowerCase() || '';
+-      if (!qTags.includes(tagFilter.toLowerCase())) return false;
+-    }
+-    if (patternFilter !== 'all') {
+-      const qPattern = progress[q.ID]?.pattern || q.pattern || '';
+-      if (qPattern !== patternFilter) return false;
+-    }
+-    return true;
+-  }).sort((a, b) => {
+-    if (!sortConfig.key) return 0;
+-    let aVal = a[sortConfig.key];
+-    let bVal = b[sortConfig.key];
+-    
+-    if (sortConfig.key === 'Difficulty') {
+-      const order = { 'easy': 1, 'medium': 2, 'hard': 3 };
+-      aVal = order[aVal?.toLowerCase()] || 0;
+-      bVal = order[bVal?.toLowerCase()] || 0;
+-    } else if (sortConfig.key === 'Acceptance %' || sortConfig.key === 'Frequency %') {
+-      aVal = parseFloat(aVal?.replace('%', '')) || 0;
+-      bVal = parseFloat(bVal?.replace('%', '')) || 0;
+-    }
+-    
+-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+-    return 0;
+-  });
+-
+-  const dueQuestions = questions.filter(q => {
+-    const prog = progress[q.ID];
+-    if (!prog || !prog.solved) return false;
+-    const isDue = prog.nextRevisionDate && new Date(prog.nextRevisionDate) <= new Date();
+-    return isDue || prog.revise;
+-  });
+-
+-  const stats = { solved: 0, attempted: 0, dueRevision: 0, easy: 0, medium: 0, hard: 0 };
+-  
+-  questions.forEach(q => {
+---
+   return (
+     <div className={styles.container}>
+       <Header authEnabled={authEnabled} isMockMode={isMockMode} />
+@@ -311,11 +81,8 @@
+           </div>
+           {authEnabled && session && (
+             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+-              <button 
+-                className={styles.flashcardBtn}
+-                onClick={() => setIsFlashcardOpen(true)}
+-              >
+-                ⚡ Quick Recall ({dueQuestions.length})
++              <button className={styles.flashcardBtn} onClick={openFlashcards}>
++                ⚡ Quick Recall ({stats.dueRevision})
+               </button>
+               <Link href="/explore" className={styles.exploreLink}>
+                 Explore Global Questions
+@@ -328,30 +95,30 @@
+           <div className={styles.emptyState}>
+             <p>Please Sign In to view your personal problem tracker.</p>
+           </div>
+-        ) : loading ? (
++        ) : isLoading && questions.length === 0 ? (
+           <div className={styles.emptyState}>
+             <p>Loading your tracker...</p>
+           </div>
+         ) : (
+           <>
+-            {analytics && analytics.activityTimeline && (
++            {authEnabled && session && stats?.activityTimeline && (
+               <div className={styles.analyticsHub}>
+                 <div className={styles.streakPanel}>
+                   <div className={styles.streakBox}>
+                     <span className={styles.streakLabel}>Current Streak</span>
+-                    <span className={styles.streakValue}>{analytics.currentStreak || 0} 🔥</span>
++                    <span className={styles.streakValue}>{stats.currentStreak || 0} 🔥</span>
+                   </div>
+                   <div className={styles.streakBox}>
+                     <span className={styles.streakLabel}>Max Streak</span>
+-                    <span className={styles.streakValue}>{analytics.maxStreak || 0} ⚡</span>
++                    <span className={styles.streakValue}>{stats.maxStreak || 0} ⚡</span>
+                   </div>
+                   <div className={styles.streakBox}>
+                     <span className={styles.streakLabel}>Weekly Goal</span>
+-                    <span className={styles.streakValue}>{analytics.weeklyCount || 0}/10 🎯</span>
++                    <span className={styles.streakValue}>{stats.weeklyCount || 0}/10 🎯</span>
+                   </div>
+                 </div>
+                 <div className={styles.heatmapPanel}>
+-                  <Heatmap data={analytics.activityTimeline} />
++                  <Heatmap data={stats.activityTimeline} />
+                 </div>
+               </div>
+             )}
+@@ -369,8 +136,8 @@
+                   id="searchInput"
+                   type="text" 
+                   placeholder="Search by Title... (Cmd+F)" 
+-                  value={searchQuery}
+-                  onChange={e => setSearchQuery(e.target.value)}
++                  value={filters.search}
++                  onChange={e => setFilter('search', e.target.value)}
+                   className={styles.difficultySelect}
+                   style={{ width: '250px' }}
+                 />
+@@ -393,14 +160,14 @@
+                   <input 
+                     type="text" 
+                     placeholder="Filter Tag..." 
+-                    value={tagFilter}
+-                    onChange={e => setTagFilter(e.target.value)}
++                    value={filters.tag}
++                    onChange={e => setFilter('tag', e.target.value)}
+                     className={styles.difficultySelect}
+                     style={{ width: '150px' }}
+                   />
+                   <select 
+-                    value={patternFilter} 
+-                    onChange={e => setPatternFilter(e.target.value)}
++                    value={filters.pattern} 
++                    onChange={e => setFilter('pattern', e.target.value)}
+                     className={styles.difficultySelect}
+                   >
+                     <option value="all">All Patterns</option>
+@@ -409,8 +176,8 @@
+                     ))}
+                   </select>
+                   <select 
+-                    value={difficultyFilter} 
+-                    onChange={e => setDifficultyFilter(e.target.value)}
++                    value={filters.difficulty} 
++                    onChange={e => setFilter('difficulty', e.target.value)}
+                     className={styles.difficultySelect}
+                   >
+                     <option value="all">All Difficulties</option>
+@@ -418,27 +185,35 @@
+                     <option value="medium">Medium</option>
+                     <option value="hard">Hard</option>
+                   </select>
++                  <select 
++                    value={filters.company} 
++                    onChange={e => setFilter('company', e.target.value)}
++                    className={styles.difficultySelect}
++                  >
++                    <option value="all">All Companies</option>
++                    {companies.map(c => <option key={c} value={c}>{c}</option>)}
++                  </select>
+                 <label className={styles.filterCheckbox}>
+                   <input 
+                     type="checkbox" 
+-                    checked={reviseFilter} 
+-                    onChange={e => setReviseFilter(e.target.checked)} 
++                    checked={filters.reviseFilter === 'true'} 
++                    onChange={e => setFilter('reviseFilter', e.target.checked ? 'true' : '')} 
+                   />
+                   Needs Revision
+                 </label>
+                 <label className={styles.filterCheckbox}>
+                   <input 
+                     type="checkbox" 
+-                    checked={hideSolved} 
+-                    onChange={e => setHideSolved(e.target.checked)} 
++                    checked={filters.hideSolved === 'true'} 
++                    onChange={e => setFilter('hideSolved', e.target.checked ? 'true' : '')} 
+                   />
+                   Hide Solved
+                 </label>
+                 <label className={styles.filterCheckbox}>
+                   <input 
+                     type="checkbox" 
+-                    checked={starredOnly} 
+-                    onChange={e => setStarredOnly(e.target.checked)} 
++                    checked={filters.starredOnly === 'true'} 
++                    onChange={e => setFilter('starredOnly', e.target.checked ? 'true' : '')} 
+                   />
+                   Starred
+                 </label>
+@@ -447,23 +222,10 @@
+             </div>
+ 
+             <Table 
+-              questions={processedQuestions}
+-              progress={progress}
+-              onStatusChange={handleStatusChange}
+               onOpenReflection={setActiveReflectionQ}
+               onOpenInitialSolve={setActiveInitialSolveQ}
+-              onToggleRevise={handleToggleRevise}
+-              onToggleImportant={handleToggleImportant}
+-              onSetAttempts={handleSetAttempts}
+-              onSetConfidence={handleSetConfidence}
+-              onSetTags={handleSetTags}
+-              onSetPattern={handleSetPattern}
+               onOpenNotes={handleOpenNotes}
+-              onSaveTime={handleSaveTime}
+-              onOpenFocusMode={setActiveFocusQ}
+               authEnabled={authEnabled}
+-              sortConfig={sortConfig}
+-              requestSort={requestSort}
+               patterns={patterns}
+               isCompactMode={isCompactMode}
+             />
+@@ -471,19 +233,19 @@
+         )}
+ 
+         {activeInitialSolveQ && (
+-        <InitialSolveModal 
+-          question={activeInitialSolveQ}
+-          patterns={patterns}
+-          onClose={() => setActiveInitialSolveQ(null)}
+-          onSave={handleSaveInitialSolve}
+-        />
+-      )}
++          <InitialSolveModal 
++            question={activeInitialSolveQ}
++            patterns={patterns}
++            onClose={() => setActiveInitialSolveQ(null)}
++            onSave={(id, data) => handleSaveInitialSolve(id, data)}
++          />
++        )}
+ 
+-      {activeNotesQ && (
++        {activeNotesQ && (
+           <div className={styles.modalOverlay}>
+             <div className={styles.modalContent} style={{ maxWidth: '800px', minHeight: '400px' }}>
+               <div className={styles.modalHeader}>
+-                <h3>Notes & Approach: {activeNotesQ.Title}</h3>
++                <h3>Notes & Approach: {activeNotesQ.title}</h3>
+                 <div className={styles.modalTabs}>
+                   <button 
+                     className={`${styles.tabBtn} ${!isEditingNotes ? styles.tabActive : ''}`}
+@@ -528,35 +290,26 @@
+           </div>
+         )}
+ 
+-        {activeFocusQ && (
+-          <FocusMode 
+-            question={activeFocusQ} 
+-            onClose={() => setActiveFocusQ(null)} 
+-            onSaveTime={handleSaveTime} 
+-          />
+-        )}
+-
+         {activeReflectionQ && (
+           <ReflectionModal
+             question={activeReflectionQ}
+             patterns={patterns}
+             onClose={() => setActiveReflectionQ(null)}
+-            onSave={handleSaveReflection}
++            onSave={(id, data) => handleSaveReflection(id, data)}
+           />
+         )}
+ 
+         {isFlashcardOpen && (
+           <FlashcardMode
+-            questions={dueQuestions}
+-            progress={progress}
++            questions={flashcardQuestions}
+             onClose={() => setIsFlashcardOpen(false)}
+-            onSetConfidence={handleSetConfidence}
++            onSetConfidence={(id, lvl) => {
++              updateProgress(id, { confidenceLevel: lvl });
++              fetchStats(); // refresh stats
++            }}
+           />
+         )}
+       </main>
+-      <footer className={styles.footer}>
+-        Made with <span className={styles.heart}>❤️</span> for the community. • Contact Us
+-      </footer>
+     </div>
+   );
+ }

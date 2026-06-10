@@ -1,0 +1,798 @@
+openapi: 3.0.3
+info:
+  title: Tacker API
+  version: 2.0.0
+  description: >
+    REST API for the Tacker application — LeetCode interview preparation tracker.
+    All filtering, sorting, pagination, and business logic lives in the backend.
+    The frontend is a pure presentation layer that consumes this API.
+
+servers:
+  - url: https://api.tacker.dev/api/v1
+    description: Production Server
+  - url: http://localhost:4000/api/v1
+    description: Mock Server (Development)
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    # ----------------------------------------------------------------
+    # Core Question + Progress
+    # ----------------------------------------------------------------
+
+    QuestionWithProgress:
+      type: object
+      required: [id, title, difficulty, isCustom]
+      properties:
+        id:
+          type: string
+          example: "1"
+        title:
+          type: string
+          example: "Two Sum"
+        url:
+          type: string
+          example: "https://leetcode.com/problems/two-sum/"
+        difficulty:
+          type: string
+          enum: [Easy, Medium, Hard]
+        acceptanceRate:
+          type: string
+          example: "57.5%"
+        frequency:
+          type: number
+          format: float
+          example: 100.0
+        companies:
+          type: array
+          items:
+            type: string
+          example: ["google", "amazon", "meta"]
+        isCustom:
+          type: boolean
+          default: false
+        progress:
+          $ref: '#/components/schemas/ProgressData'
+
+    ProgressData:
+      type: object
+      description: >
+        Full user progress record for a question. All fields are server-authoritative —
+        never compute dates or SRS intervals on the frontend.
+      properties:
+        status:
+          type: string
+          enum: [Unsolved, Attempted, Solved]
+          default: Unsolved
+        dateSolved:
+          type: string
+          format: date-time
+          nullable: true
+          description: Stamped by the server when status transitions to Solved.
+        confidenceLevel:
+          type: integer
+          minimum: 1
+          maximum: 4
+          nullable: true
+          description: >
+            SRS confidence: 1=Forgot (1d), 2=Hard (3d), 3=Good (7d), 4=Easy (14d)
+        nextRevisionDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Computed by server from confidenceLevel using SRS intervals.
+        revise:
+          type: boolean
+          default: false
+          description: Whether the user has flagged this for active revision.
+        attempts:
+          type: integer
+          minimum: 0
+          default: 0
+        timeSpent:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Total time spent in seconds.
+        notes:
+          type: string
+          default: ""
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+          description: User-curated tags (array, not comma-string).
+        pattern:
+          type: string
+          default: ""
+          description: Algorithmic pattern assigned by user.
+        solutionLink:
+          type: string
+          default: ""
+        important:
+          type: boolean
+          default: false
+          description: Starred / bookmarked by user.
+
+    ProgressUpdateRequest:
+      type: object
+      description: >
+        Partial update to user progress. Send only the fields you want to change.
+        The server applies business rules — e.g., setting status=Solved stamps dateSolved
+        and computes nextRevisionDate from confidenceLevel.
+      properties:
+        status:
+          type: string
+          enum: [Unsolved, Attempted, Solved]
+        confidenceLevel:
+          type: integer
+          minimum: 1
+          maximum: 4
+          nullable: true
+        revise:
+          type: boolean
+        attempts:
+          type: integer
+          minimum: 0
+        timeSpent:
+          type: integer
+          minimum: 0
+        notes:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        pattern:
+          type: string
+        solutionLink:
+          type: string
+        important:
+          type: boolean
+        dateSolved:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional override; server stamps current time if omitted on Solved.
+        nextRevisionDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional override; server computes from confidenceLevel if omitted.
+
+    BulkProgressItem:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        confidenceLevel:
+          type: integer
+          minimum: 1
+          maximum: 4
+          nullable: true
+        revise:
+          type: boolean
+        notes:
+          type: string
+        pattern:
+          type: string
+        timeSpent:
+          type: integer
+
+    BulkProgressRequest:
+      type: object
+      required: [updates]
+      properties:
+        updates:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkProgressItem'
+
+    BulkProgressResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              progress:
+                $ref: '#/components/schemas/ProgressData'
+
+    PaginatedQuestionsResponse:
+      type: object
+      required: [data, totalCount, page, totalPages]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionWithProgress'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        totalPages:
+          type: integer
+
+    # ----------------------------------------------------------------
+    # Utilities / Metadata
+    # ----------------------------------------------------------------
+
+    UtilityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    MetadataRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    MetadataResponse:
+      type: object
+      properties:
+        item:
+          $ref: '#/components/schemas/UtilityItem'
+
+    UtilitiesResponse:
+      type: object
+      properties:
+        difficulties:
+          type: array
+          items:
+            $ref: '#/components/schemas/UtilityItem'
+        platforms:
+          type: array
+          items:
+            $ref: '#/components/schemas/UtilityItem'
+        patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/UtilityItem'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/UtilityItem'
+
+    # ----------------------------------------------------------------
+    # Companies
+    # ----------------------------------------------------------------
+
+    CompanyItem:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "google"
+        slug:
+          type: string
+          example: "google"
+        count:
+          type: integer
+          description: Number of questions associated with this company.
+          example: 42
+
+    # ----------------------------------------------------------------
+    # Custom Questions
+    # ----------------------------------------------------------------
+
+    CustomQuestionRequest:
+      type: object
+      required: [title]
+      properties:
+        id:
+          type: string
+          nullable: true
+        title:
+          type: string
+        link:
+          type: string
+        difficulty:
+          type: string
+          enum: [Easy, Medium, Hard]
+          default: Medium
+        platform:
+          type: string
+        pattern:
+          type: string
+        confidenceLevel:
+          type: integer
+          minimum: 1
+          maximum: 4
+          nullable: true
+        timeTaken:
+          type: integer
+          nullable: true
+          description: Time taken in minutes.
+        tags:
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: string
+          description: Tags as array or comma-separated string.
+
+    CustomQuestionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        question:
+          $ref: '#/components/schemas/QuestionWithProgress'
+
+    # ----------------------------------------------------------------
+    # Analytics
+    # ----------------------------------------------------------------
+
+    NameCountPair:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+
+    DifficultyBreakdown:
+      type: object
+      properties:
+        Easy:
+          type: integer
+        Medium:
+          type: integer
+        Hard:
+          type: integer
+
+    StatsResponse:
+      type: object
+      description: Lightweight stats — StatsBar, streak widget, heatmap. Cached server-side.
+      properties:
+        totalSolved:
+          type: integer
+        totalAttempted:
+          type: integer
+        totalQuestions:
+          type: integer
+        totalRevise:
+          type: integer
+        currentStreak:
+          type: integer
+        maxStreak:
+          type: integer
+        weeklyCount:
+          type: integer
+        activityTimeline:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Map of date (YYYY-MM-DD) → solved count.
+        difficultyBreakdown:
+          $ref: '#/components/schemas/DifficultyBreakdown'
+
+    AnalyticsResponse:
+      allOf:
+        - $ref: '#/components/schemas/StatsResponse'
+        - type: object
+          description: Full analytics including charts — only fetched by Dashboard.
+          properties:
+            topCompanies:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            platformsBreakdown:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            avgTimePerDiff:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  avgMinutes:
+                    type: integer
+            patternMasteryData:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  solved:
+                    type: integer
+                  score:
+                    type: integer
+                    description: Mastery percentage (0-100).
+            revisionList:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  difficulty:
+                    type: string
+                  nextRevisionDate:
+                    type: string
+                    nullable: true
+
+# ----------------------------------------------------------------
+# PATHS
+# ----------------------------------------------------------------
+
+paths:
+
+  /questions:
+    get:
+      operationId: getQuestions
+      summary: Get paginated, filtered, sorted questions with user progress
+      description: >
+        Server-side filtering and sorting. Uses in-memory indexes for O(1)
+        company and difficulty lookups. The UI consumes the output directly.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 5000
+        - name: search
+          in: query
+          schema:
+            type: string
+          allowReserved: true
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [Easy, Medium, Hard, all]
+        - name: company
+          in: query
+          schema:
+            type: string
+          allowReserved: true
+          description: Company slug (lowercase) or "all" or "Custom Questions".
+        - name: tag
+          in: query
+          schema:
+            type: string
+          allowReserved: true
+        - name: pattern
+          in: query
+          schema:
+            type: string
+          allowReserved: true
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Unsolved, Attempted, Solved, all]
+        - name: starredOnly
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+        - name: hideSolved
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+        - name: reviseFilter
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+        - name: trackerMode
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+          description: >
+            When true, returns only questions the user has interacted with
+            (solved, attempted, starred, or marked for revision).
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+          allowReserved: true
+        - name: sortDirection
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: Paginated question list with progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedQuestionsResponse'
+        '401':
+          description: Unauthorized
+
+  /progress/{questionId}:
+    get:
+      operationId: getProgress
+      summary: Get progress for a single question
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Progress record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressData'
+        '401':
+          description: Unauthorized
+    patch:
+      operationId: updateProgress
+      summary: Update progress for a question (upsert)
+      description: >
+        Server applies all business rules. status=Unsolved resets all fields.
+        status=Solved stamps dateSolved and computes nextRevisionDate from confidenceLevel.
+        revise=true computes nextRevisionDate from confidenceLevel via SRS intervals.
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgressUpdateRequest'
+      responses:
+        '200':
+          description: Full updated progress record (use this as source of truth)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressData'
+        '401':
+          description: Unauthorized
+
+  /progress/bulk:
+    post:
+      operationId: bulkUpdateProgress
+      summary: Batch update progress for multiple questions
+      description: Used by flashcard mode to save multiple confidence updates at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkProgressRequest'
+      responses:
+        '200':
+          description: Batch update results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkProgressResponse'
+        '401':
+          description: Unauthorized
+
+  /stats:
+    get:
+      operationId: getStats
+      summary: Lightweight stats (StatsBar, streak, heatmap)
+      description: >
+        Cached server-side. Returns only the stats needed by the main page
+        widgets — much faster than full analytics. Cache invalidated on any
+        progress update.
+      responses:
+        '200':
+          description: Stats response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+        '401':
+          description: Unauthorized
+
+  /analytics:
+    get:
+      operationId: getAnalytics
+      summary: Full analytics for Dashboard
+      description: >
+        Complete analytics including charts data. Cached server-side.
+        Only call this from the Dashboard page.
+      responses:
+        '200':
+          description: Full analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsResponse'
+        '401':
+          description: Unauthorized
+
+  /utilities:
+    get:
+      operationId: getUtilities
+      summary: Get system utilities (difficulties, patterns, platforms, tags)
+      responses:
+        '200':
+          description: Utilities bundle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UtilitiesResponse'
+        '401':
+          description: Unauthorized
+
+  /companies:
+    get:
+      operationId: getCompanies
+      summary: Get all companies sorted by question count
+      responses:
+        '200':
+          description: Enriched company list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompanyItem'
+        '401':
+          description: Unauthorized
+
+  /custom-questions:
+    post:
+      operationId: createCustomQuestion
+      summary: Create a custom tracked question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomQuestionRequest'
+      responses:
+        '200':
+          description: Created question with initial progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomQuestionResponse'
+        '401':
+          description: Unauthorized
+
+  /patterns:
+    get:
+      operationId: getPatterns
+      summary: Get all patterns
+      responses:
+        '200':
+          description: Pattern list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UtilityItem'
+        '401':
+          description: Unauthorized
+    post:
+      operationId: createPattern
+      summary: Create a new pattern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRequest'
+      responses:
+        '200':
+          description: Created pattern
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+        '401':
+          description: Unauthorized
+
+  /platforms:
+    get:
+      operationId: getPlatforms
+      summary: Get all platforms
+      responses:
+        '200':
+          description: Platform list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UtilityItem'
+        '401':
+          description: Unauthorized
+    post:
+      operationId: createPlatform
+      summary: Create a new platform
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRequest'
+      responses:
+        '200':
+          description: Created platform
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+        '401':
+          description: Unauthorized
+
+  /tags:
+    get:
+      operationId: getTags
+      summary: Get all tags
+      responses:
+        '200':
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UtilityItem'
+        '401':
+          description: Unauthorized
+    post:
+      operationId: createTag
+      summary: Create a new tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRequest'
+      responses:
+        '200':
+          description: Created tag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+        '401':
+          description: Unauthorized

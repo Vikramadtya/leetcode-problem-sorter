@@ -1,0 +1,29 @@
+{
+  "//": "==========================================================",
+  "//": " GLOBAL FRONTEND CONFIGURATION",
+  "//": " Modify these values to quickly reconfigure the application",
+  "//": "==========================================================",
+
+  "app": {
+    "name": "Tacker",
+    "description": "Track your LeetCode interview preparation questions.",
+    "defaultTheme": "dark"
+  },
+  
+  "api": {
+    "//": "The base URL for the API. In development, this usually points to the mock-server.",
+    "//": "You can also override this using the NEXT_PUBLIC_API_URL environment variable.",
+    "endpoint": "http://localhost:4000/api/v1",
+    
+    "//": "Timeout in milliseconds for API requests",
+    "timeoutMs": 10000
+  },
+
+  "features": {
+    "//": "Enable or disable Google OAuth Authentication",
+    "authEnabled": true,
+    
+    "//": "Whether to hide the 'Explore' tab globally",
+    "hideExploreTab": false
+  }
+}
