@@ -232,6 +232,17 @@ export default function Explore() {
     });
   };
 
+  const handleSetAttempts = (id, newAttempts) => {
+    if (!session) return;
+    const updates = { attempts: newAttempts };
+    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+    fetch('/api/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, updates })
+    });
+  };
+
   const handleSetConfidence = (id, level) => {
     if (!session) return;
     const intervals = { 1: 1, 2: 3, 3: 5, 4: 7, 5: 14 };
@@ -451,6 +462,7 @@ export default function Explore() {
           onOpenInitialSolve={setActiveInitialSolveQ}
           onOpenReflection={setActiveReflectionQ}
           onToggleImportant={handleToggleImportant}
+          onSetAttempts={handleSetAttempts}
           sortConfig={sortConfig}
           requestSort={requestSort}
           authEnabled={authEnabled}

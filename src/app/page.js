@@ -287,6 +287,17 @@ export default function Home() {
     });
   };
 
+  const handleSetAttempts = (id, newAttempts) => {
+    if (!session) return;
+    const updates = { attempts: newAttempts };
+    setProgress(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
+    fetch('/api/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, updates })
+    });
+  };
+
   const handleToggleRevise = (id) => {
     if (!session) return;
     const isRevise = progress[id]?.revise;
@@ -330,6 +341,14 @@ export default function Home() {
     const status = prog.status || (prog.solved ? 'Solved' : 'Unsolved');
     const isSolved = status === 'Solved';
     
+    // Hide global questions that have been completely cleared of progress
+    if (!q.isCustom) {
+      const isAttempted = status === 'Attempted' || prog.attempts > 0;
+      if (!isSolved && !isAttempted && !prog.important && !prog.revise) {
+        return false;
+      }
+    }
+
     if (hideSolved && isSolved) {
       return false;
     }
@@ -557,6 +576,7 @@ export default function Home() {
               onOpenInitialSolve={setActiveInitialSolveQ}
               onToggleRevise={handleToggleRevise}
               onToggleImportant={handleToggleImportant}
+              onSetAttempts={handleSetAttempts}
               onSetConfidence={handleSetConfidence}
               onSetTags={handleSetTags}
               onSetPattern={handleSetPattern}

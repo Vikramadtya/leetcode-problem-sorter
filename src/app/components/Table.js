@@ -19,11 +19,12 @@ export default function Table({
   requestSort, 
   patterns = [], 
   isCompactMode = false,
-  visibleColumns = ['STATUS', 'REVISE', 'ID', 'Title', 'Difficulty', 'Attempts', 'Time', 'Acceptance %', 'Frequency %', 'DateSolved'],
+  visibleColumns = ['STATUS', 'REVISE', 'ID', 'Title', 'Difficulty', 'Companies', 'Attempts', 'Time', 'Acceptance %', 'Frequency %', 'DateSolved'],
   activeTimers = {},
   onStartTimer,
   onStopTimer,
-  onToggleImportant
+  onToggleImportant,
+  onSetAttempts
 }) {
   const getDifficultyClass = (diff) => {
     switch((diff || '').toLowerCase()) {
@@ -85,6 +86,11 @@ export default function Table({
                 DIFFICULTY {renderSortIcon('Difficulty')}
               </th>
             )}
+            {isVisible('Companies') && (
+              <th className={`${styles.th} ${styles.thCenter}`}>
+                COMPANIES
+              </th>
+            )}
             {!isCompactMode && authEnabled && isVisible('Attempts') && (
               <th className={`${styles.th} ${styles.thCenter} ${styles.sortable}`} onClick={() => requestSort && requestSort('Attempts')}>
                 ATTEMPTS {renderSortIcon('Attempts')}
@@ -116,7 +122,7 @@ export default function Table({
           {questions.map((q) => {
             const prog = progress[q.ID] || {};
             const isSolved = prog.status === 'Solved' || prog.solved === true;
-            const isAttempted = prog.status === 'Attempted';
+            const isAttempted = prog.status === 'Attempted' || prog.solved === true || prog.status === 'Solved';
             const isRevise = prog.revise;
             const rowClass = isSolved ? styles.rowSolved : (isAttempted ? styles.attemptedRow : styles.row);
             
@@ -295,9 +301,26 @@ export default function Table({
                   </td>
                 )}
 
+                {isVisible('Companies') && (
+                  <td className={`${styles.td} ${styles.tdCenter}`}>
+                    {q.companies && q.companies.length > 0 ? (
+                      <div className={styles.companiesList}>
+                        {q.companies.slice(0, 3).map(c => <span key={c} className={styles.companyPill} title={c}>{c}</span>)}
+                        {q.companies.length > 3 && <span className={styles.companyPill} title={q.companies.slice(3).join(', ')}>+{q.companies.length - 3}</span>}
+                      </div>
+                    ) : '-'}
+                  </td>
+                )}
+
                 {!isCompactMode && authEnabled && isVisible('Attempts') && (
                   <td className={`${styles.td} ${styles.tdCenter}`}>
-                    {attempts > 0 ? attempts : '-'}
+                    {(attempts > 0 || isAttempted) ? (
+                      <div className={styles.attemptControl}>
+                        <button className={styles.attemptBtn} onClick={() => onSetAttempts && onSetAttempts(q.ID, Math.max(0, attempts - 1))}>-</button>
+                        <span style={{ minWidth: '20px', display: 'inline-block' }}>{attempts}</span>
+                        <button className={styles.attemptBtn} onClick={() => onSetAttempts && onSetAttempts(q.ID, attempts + 1)}>+</button>
+                      </div>
+                    ) : '-'}
                   </td>
                 )}
 
