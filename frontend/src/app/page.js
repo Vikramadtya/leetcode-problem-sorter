@@ -8,11 +8,10 @@ import StatsBar from './components/StatsBar';
 import Heatmap from './components/Heatmap';
 import Table from './components/Table';
 import ReflectionModal from './components/ReflectionModal';
+import NotesModal from './components/NotesModal';
 import InitialSolveModal from './components/InitialSolveModal';
 import FlashcardMode from './components/FlashcardMode';
 import styles from './page.module.css';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../store/useAppStore';
 import config from '../config.json';
 import { apiClient } from '../lib/api/apiClient';
@@ -42,13 +41,8 @@ export default function Home() {
   const [activeInitialSolveQ, setActiveInitialSolveQ] = useState(null);
   const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
   const [flashcardQuestions, setFlashcardQuestions] = useState([]);
-  const [notesDraft, setNotesDraft] = useState('');
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isCompactMode, setIsCompactMode] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-
-  // Debounced search
-  const searchDebounce = useRef(null);
 
   // Initialise tracker mode on mount (once)
   const initialized = useRef(false);
@@ -78,10 +72,7 @@ export default function Home() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const handleSearchChange = useCallback((value) => {
-    clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => setFilter('search', value), 300);
-  }, [setFilter]);
+  // No separate debounce needed — store.setFilter debounces internally
 
   // ----------------------------------------------------------------
   // InitialSolveModal save — server handles ALL computation
@@ -120,17 +111,7 @@ export default function Home() {
     setActiveReflectionQ(null);
   }, [questions, updateProgress]);
 
-  const handleOpenNotes = useCallback((q) => {
-    setActiveNotesQ(q);
-    setNotesDraft(q.progress?.notes || '');
-    setIsEditingNotes(false);
-  }, []);
-
-  const handleSaveNotes = useCallback(() => {
-    if (!activeNotesQ) return;
-    updateProgress(activeNotesQ.id, { notes: notesDraft });
-    setIsEditingNotes(false);
-  }, [activeNotesQ, notesDraft, updateProgress]);
+  const handleOpenNotes = useCallback((q) => setActiveNotesQ(q), []);
 
   const openFlashcards = useCallback(async () => {
     try {
@@ -214,7 +195,7 @@ export default function Home() {
                   type="text"
                   placeholder="Search by Title... (Cmd+F)"
                   defaultValue={filters.search}
-                  onChange={e => handleSearchChange(e.target.value)}
+                  onChange={e => setFilter('search', e.target.value)}
                   className={styles.difficultySelect}
                   style={{ width: '250px' }}
                 />
@@ -238,10 +219,7 @@ export default function Home() {
                     type="text"
                     placeholder="Filter Tag..."
                     defaultValue={filters.tag}
-                    onChange={e => {
-                      clearTimeout(searchDebounce.current);
-                      searchDebounce.current = setTimeout(() => setFilter('tag', e.target.value), 300);
-                    }}
+                    onChange={e => setFilter('tag', e.target.value)}
                     className={styles.difficultySelect}
                     style={{ width: '150px' }}
                   />
@@ -342,48 +320,11 @@ export default function Home() {
         )}
 
         {activeNotesQ && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent} style={{ maxWidth: '800px', minHeight: '400px' }}>
-              <div className={styles.modalHeader}>
-                <h3>Notes & Approach: {activeNotesQ.title}</h3>
-                <div className={styles.modalTabs}>
-                  <button
-                    className={`${styles.tabBtn} ${!isEditingNotes ? styles.tabActive : ''}`}
-                    onClick={() => setIsEditingNotes(false)}
-                  >Preview</button>
-                  <button
-                    className={`${styles.tabBtn} ${isEditingNotes ? styles.tabActive : ''}`}
-                    onClick={() => setIsEditingNotes(true)}
-                  >Edit</button>
-                </div>
-              </div>
-              <div className={styles.modalBody}>
-                {isEditingNotes ? (
-                  <textarea
-                    className={styles.modalTextarea}
-                    rows={15}
-                    placeholder="Write your approach, time complexity, or paste your solution code here using Markdown..."
-                    value={notesDraft}
-                    onChange={e => setNotesDraft(e.target.value)}
-                  />
-                ) : (
-                  <div className={styles.markdownPreview}>
-                    {notesDraft ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{notesDraft}</ReactMarkdown>
-                    ) : (
-                      <p className={styles.emptyState}>No notes yet. Click Edit to add some.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" onClick={() => setActiveNotesQ(null)} className={styles.modalCancelBtn}>Close</button>
-                {isEditingNotes && (
-                  <button type="button" onClick={handleSaveNotes} className={styles.modalSubmitBtn}>Save Notes</button>
-                )}
-              </div>
-            </div>
-          </div>
+          <NotesModal
+            question={activeNotesQ}
+            onClose={() => setActiveNotesQ(null)}
+            onSave={(id, notes) => updateProgress(id, { notes })}
+          />
         )}
 
         {activeReflectionQ && (
@@ -398,13 +339,9 @@ export default function Home() {
         {isFlashcardOpen && (
           <FlashcardMode
             questions={flashcardQuestions}
-            onClose={() => {
-              setIsFlashcardOpen(false);
-              // Stats refresh is handled inside FlashcardMode via onBulkSave
-            }}
+            onClose={() => setIsFlashcardOpen(false)}
             onBulkSave={async (updates) => {
               if (updates && updates.length > 0) {
-                const { apiClient } = await import('../lib/api/apiClient');
                 await apiClient.bulkUpdateProgress(updates).catch(console.error);
                 fetchLightStats();
               }

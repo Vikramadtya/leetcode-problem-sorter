@@ -55,19 +55,28 @@ export default function Dashboard() {
       <div className={styles.container}>
         <Header authEnabled={true} />
         <main className={styles.main}>
-          <div className={styles.error}>Unable to load dashboard. Ensure your database is connected.</div>
+          <div className={styles.error}>
+            Unable to load dashboard. Is the mock server running at port 4000?
+          </div>
         </main>
       </div>
     );
   }
 
+  // Safe defaults prevent crashes if server returns partial data
+  const breakdown = analytics?.difficultyBreakdown || { Easy: 0, Medium: 0, Hard: 0 };
   const difficultyData = [
-    { name: 'Easy', value: analytics.difficultyBreakdown.Easy },
-    { name: 'Medium', value: analytics.difficultyBreakdown.Medium },
-    { name: 'Hard', value: analytics.difficultyBreakdown.Hard },
+    { name: 'Easy',   value: breakdown.Easy   ?? 0 },
+    { name: 'Medium', value: breakdown.Medium  ?? 0 },
+    { name: 'Hard',   value: breakdown.Hard    ?? 0 },
   ];
 
-  const completionPercent = ((analytics.totalSolved / Math.max(analytics.totalQuestions, 1)) * 100).toFixed(1);
+  const completionPercent = ((analytics.totalSolved / Math.max(analytics.totalQuestions ?? 1, 1)) * 100).toFixed(1);
+  const topCompanies    = analytics.topCompanies       || [];
+  const patternMastery  = analytics.patternMasteryData || [];
+  const revisionList    = analytics.revisionList       || [];
+  const avgTimePerDiff  = analytics.avgTimePerDiff     || [];
+  const platformsData   = analytics.platformsBreakdown || [];
 
   return (
     <div className={styles.container}>
@@ -83,7 +92,7 @@ export default function Dashboard() {
                 ? "🌟 Your revision queue is completely clear! Great job. Time to learn something new or tackle a hard problem."
                 : `🎯 You have ${analytics.totalRevise} problems due for revision. Knock them out to solidify your memory.`}
             </p>
-            {analytics.patternMasteryData && analytics.patternMasteryData.length > 0 && (
+          {analytics.patternMasteryData && analytics.patternMasteryData.length > 0 && (
               <p>
                 💪 You are strongest in <strong>{analytics.patternMasteryData[0].name}</strong> with a {analytics.patternMasteryData[0].score}% mastery. Keep it up!
               </p>
@@ -139,9 +148,9 @@ export default function Dashboard() {
           <div className={styles.chartCard}>
             <h3>Top Companies (Solved)</h3>
             <div className={styles.chartWrapper}>
-              {analytics.topCompanies.length > 0 ? (
+              {topCompanies.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.topCompanies} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <BarChart data={topCompanies} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
                     <XAxis type="number" stroke="var(--text-muted)" />
                     <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
@@ -161,11 +170,11 @@ export default function Dashboard() {
           <div className={styles.chartCard}>
             <h3>Platforms Breakdown</h3>
             <div className={styles.chartWrapper}>
-              {analytics.platformsBreakdown && analytics.platformsBreakdown.length > 0 ? (
+              {platformsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={analytics.platformsBreakdown}
+                      data={platformsData}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -174,7 +183,7 @@ export default function Dashboard() {
                       dataKey="count"
                       nameKey="name"
                     >
-                      {analytics.platformsBreakdown.map((entry, index) => (
+                      {platformsData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -196,9 +205,9 @@ export default function Dashboard() {
           <div className={styles.chartCard}>
             <h3>Average Time per Difficulty</h3>
             <div className={styles.chartWrapper}>
-              {analytics.avgTimePerDiff && analytics.avgTimePerDiff.length > 0 ? (
+              {avgTimePerDiff.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.avgTimePerDiff} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart data={avgTimePerDiff} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
                     <XAxis dataKey="name" stroke="var(--text-muted)" />
                     <YAxis stroke="var(--text-muted)" label={{ value: 'Minutes', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)' }} />
@@ -218,9 +227,9 @@ export default function Dashboard() {
           <div className={styles.chartCard}>
             <h3>Pattern Mastery</h3>
             <div className={styles.chartWrapper}>
-              {analytics.patternMasteryData && analytics.patternMasteryData.length > 0 ? (
+              {patternMastery.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.patternMasteryData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart data={patternMastery} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
                     <XAxis type="number" domain={[0, 100]} stroke="var(--text-muted)" />
                     <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
@@ -241,9 +250,9 @@ export default function Dashboard() {
           <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
             <h3>Due Revisions</h3>
             <div className={styles.revisionList}>
-              {analytics.revisionList && analytics.revisionList.length > 0 ? (
+              {revisionList.length > 0 ? (
                 <ul className={styles.revList}>
-                  {analytics.revisionList.map(q => (
+                  {revisionList.map(q => (
                     <li key={q.id} className={styles.revItem}>
                       <span className={styles.revId}>{q.id}</span>
                       <span className={styles.revTitle}>{q.title}</span>

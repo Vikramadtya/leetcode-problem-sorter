@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Header from '../components/Header';
@@ -8,18 +8,27 @@ import Table from '../components/Table';
 import ReflectionModal from '../components/ReflectionModal';
 import InitialSolveModal from '../components/InitialSolveModal';
 import StatsBar from '../components/StatsBar';
+import NotesModal from '../components/NotesModal';
 import styles from '../page.module.css';
 import { useAppStore } from '../../store/useAppStore';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import config from '../../config.json';
 
+/**
+ * Explore page — global question catalogue.
+ *
+ * Key rules:
+ * - Uses resetToExploreMode() so trackerMode=false (all questions shown).
+ * - Calls fetchLightStats() so StatsBar has data.
+ * - Does NOT add its own debounce — the store handles debouncing internally.
+ * - Shows a Retry button on fetch errors.
+ */
 export default function Explore() {
   const { data: session } = useSession();
 
   const {
     questions,
     isLoading,
+    error,
     filters,
     setFilter,
     updateProgress,
@@ -27,6 +36,7 @@ export default function Explore() {
     patterns,
     stats,
     fetchUtilities,
+    fetchLightStats,
     resetToExploreMode,
   } = useAppStore();
 
@@ -35,11 +45,7 @@ export default function Explore() {
   const [activeNotesQ, setActiveNotesQ] = useState(null);
   const [activeReflectionQ, setActiveReflectionQ] = useState(null);
   const [activeInitialSolveQ, setActiveInitialSolveQ] = useState(null);
-  const [notesDraft, setNotesDraft] = useState('');
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isCompactMode, setIsCompactMode] = useState(false);
-
-  const searchDebounce = useRef(null);
 
   // Initialise explore mode on mount (once)
   const initialized = useRef(false);
@@ -48,14 +54,15 @@ export default function Explore() {
     initialized.current = true;
     resetToExploreMode();
     fetchUtilities();
+    fetchLightStats(); // StatsBar needs this
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — close modals on Escape, focus search on Cmd+F
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
-        document.getElementById('searchInput')?.focus();
+        document.getElementById('exploreSearchInput')?.focus();
       }
       if (e.key === 'Escape') {
         setActiveNotesQ(null);
@@ -67,9 +74,7 @@ export default function Explore() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // ----------------------------------------------------------------
-  // InitialSolveModal save — server handles ALL computation
-  // ----------------------------------------------------------------
+  // InitialSolveModal save — all computation server-side
   const handleSaveInitialSolve = useCallback((id, { solutionLink, notes, pattern, memoryStrength }) => {
     updateProgress(id, {
       status: 'Solved',
@@ -82,14 +87,14 @@ export default function Explore() {
     setActiveInitialSolveQ(null);
   }, [updateProgress]);
 
-  // ----------------------------------------------------------------
   // ReflectionModal save
-  // ----------------------------------------------------------------
   const handleSaveReflection = useCallback((id, { insight, pattern, memoryStrength }) => {
     const q = questions.find(q => q.id === id);
     const existingNotes = q?.progress?.notes || '';
     const updatedNotes = insight
-      ? (existingNotes ? `${existingNotes}\n\n**Reflection:**\n${insight}` : `**Reflection:**\n${insight}`)
+      ? (existingNotes
+          ? `${existingNotes}\n\n**Reflection:**\n${insight}`
+          : `**Reflection:**\n${insight}`)
       : existingNotes;
 
     updateProgress(id, {
@@ -101,17 +106,7 @@ export default function Explore() {
     setActiveReflectionQ(null);
   }, [questions, updateProgress]);
 
-  const handleOpenNotes = useCallback((q) => {
-    setActiveNotesQ(q);
-    setNotesDraft(q.progress?.notes || '');
-    setIsEditingNotes(false);
-  }, []);
-
-  const handleSaveNotes = useCallback(() => {
-    if (!activeNotesQ) return;
-    updateProgress(activeNotesQ.id, { notes: notesDraft });
-    setIsEditingNotes(false);
-  }, [activeNotesQ, notesDraft, updateProgress]);
+  const handleOpenNotes = useCallback((q) => setActiveNotesQ(q), []);
 
   return (
     <div className={styles.container}>
@@ -120,18 +115,16 @@ export default function Explore() {
         <div className={styles.headerRow}>
           <div>
             <h1 className={styles.title}>Explore Global Questions</h1>
-            <p className={styles.subtitle}>Discover and track new LeetCode questions from top companies.</p>
+            <p className={styles.subtitle}>Discover and track LeetCode questions from top companies.</p>
           </div>
-          <Link href="/" className={styles.exploreLink}>
-            ← Back to Tracker
-          </Link>
+          <Link href="/" className={styles.exploreLink}>← Back to Tracker</Link>
         </div>
 
         <StatsBar
           stats={stats}
           total={questions.length}
           title="Explore Stats"
-          secondLabel="TOTAL SHOWN"
+          secondLabel="SHOWING"
           secondValue={questions.length}
         />
 
@@ -139,51 +132,30 @@ export default function Explore() {
         <div className={styles.trackerFilters}>
           <div className={styles.searchBarWrapper}>
             <input
-              id="searchInput"
+              id="exploreSearchInput"
               type="text"
               placeholder="Search by Title... (Cmd+F)"
               defaultValue={filters.search}
-              onChange={e => {
-                clearTimeout(searchDebounce.current);
-                searchDebounce.current = setTimeout(() => setFilter('search', e.target.value), 300);
-              }}
+              onChange={e => setFilter('search', e.target.value)}
               className={styles.difficultySelect}
               style={{ width: '250px' }}
+              aria-label="Search questions by title"
             />
             <button
               className={styles.compactToggleBtn}
               onClick={() => setIsCompactMode(v => !v)}
+              aria-pressed={isCompactMode}
             >
               {isCompactMode ? 'Detailed View' : 'Compact View'}
             </button>
           </div>
 
           <div className={styles.filterDrawer}>
-            <input
-              type="text"
-              placeholder="Filter Tag..."
-              defaultValue={filters.tag}
-              onChange={e => {
-                clearTimeout(searchDebounce.current);
-                searchDebounce.current = setTimeout(() => setFilter('tag', e.target.value), 300);
-              }}
-              className={styles.difficultySelect}
-              style={{ width: '150px' }}
-            />
-            <select
-              value={filters.pattern}
-              onChange={e => setFilter('pattern', e.target.value)}
-              className={styles.difficultySelect}
-            >
-              <option value="all">All Patterns</option>
-              {patterns.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
-              ))}
-            </select>
             <select
               value={filters.difficulty}
               onChange={e => setFilter('difficulty', e.target.value)}
               className={styles.difficultySelect}
+              aria-label="Filter by difficulty"
             >
               <option value="all">All Difficulties</option>
               <option value="Easy">Easy</option>
@@ -194,13 +166,24 @@ export default function Explore() {
               value={filters.company}
               onChange={e => setFilter('company', e.target.value)}
               className={styles.difficultySelect}
+              aria-label="Filter by company"
             >
               <option value="all">All Companies</option>
-              {/* B-1 FIX: companies are {name, slug, count} objects */}
               {companies.map(c => (
                 <option key={c.slug || c} value={c.slug || c}>
                   {c.name || c}
                 </option>
+              ))}
+            </select>
+            <select
+              value={filters.pattern}
+              onChange={e => setFilter('pattern', e.target.value)}
+              className={styles.difficultySelect}
+              aria-label="Filter by pattern"
+            >
+              <option value="all">All Patterns</option>
+              {patterns.map(p => (
+                <option key={p.id} value={p.name}>{p.name}</option>
               ))}
             </select>
             <label className={styles.filterCheckbox}>
@@ -224,6 +207,17 @@ export default function Explore() {
 
         {isLoading && questions.length === 0 ? (
           <div className={styles.emptyState}><p>Loading global questions...</p></div>
+        ) : error ? (
+          <div className={styles.emptyState}>
+            <p>Failed to load questions. Is the mock server running at port 4000?</p>
+            <button
+              className={styles.compactToggleBtn}
+              onClick={() => resetToExploreMode()}
+              style={{ marginTop: '0.75rem' }}
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <Table
             onOpenReflection={setActiveReflectionQ}
@@ -244,7 +238,6 @@ export default function Explore() {
             onSave={(id, data) => handleSaveInitialSolve(id, data)}
           />
         )}
-
         {activeReflectionQ && (
           <ReflectionModal
             question={activeReflectionQ}
@@ -253,50 +246,12 @@ export default function Explore() {
             onSave={(id, data) => handleSaveReflection(id, data)}
           />
         )}
-
         {activeNotesQ && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalContent} style={{ maxWidth: '800px', minHeight: '400px' }}>
-              <div className={styles.modalHeader}>
-                <h3>Notes & Approach: {activeNotesQ.title}</h3>
-                <div className={styles.modalTabs}>
-                  <button
-                    className={`${styles.tabBtn} ${!isEditingNotes ? styles.tabActive : ''}`}
-                    onClick={() => setIsEditingNotes(false)}
-                  >Preview</button>
-                  <button
-                    className={`${styles.tabBtn} ${isEditingNotes ? styles.tabActive : ''}`}
-                    onClick={() => setIsEditingNotes(true)}
-                  >Edit</button>
-                </div>
-              </div>
-              <div className={styles.modalBody}>
-                {isEditingNotes ? (
-                  <textarea
-                    className={styles.modalTextarea}
-                    rows={15}
-                    placeholder="Write your approach, time complexity, or solution in Markdown..."
-                    value={notesDraft}
-                    onChange={e => setNotesDraft(e.target.value)}
-                  />
-                ) : (
-                  <div className={styles.markdownPreview}>
-                    {notesDraft ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{notesDraft}</ReactMarkdown>
-                    ) : (
-                      <p className={styles.emptyState}>No notes yet. Click Edit to add some.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className={styles.modalActions}>
-                <button type="button" onClick={() => setActiveNotesQ(null)} className={styles.modalCancelBtn}>Close</button>
-                {isEditingNotes && (
-                  <button type="button" onClick={handleSaveNotes} className={styles.modalSubmitBtn}>Save Notes</button>
-                )}
-              </div>
-            </div>
-          </div>
+          <NotesModal
+            question={activeNotesQ}
+            onClose={() => setActiveNotesQ(null)}
+            onSave={(id, notes) => updateProgress(id, { notes })}
+          />
         )}
       </main>
     </div>

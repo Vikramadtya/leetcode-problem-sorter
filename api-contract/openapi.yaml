@@ -1,11 +1,21 @@
 openapi: 3.0.3
 info:
   title: Tacker API
-  version: 2.0.0
+  version: 2.1.0
   description: >
     REST API for the Tacker application — LeetCode interview preparation tracker.
-    All filtering, sorting, pagination, and business logic lives in the backend.
-    The frontend is a pure presentation layer that consumes this API.
+    All filtering, sorting, pagination, SRS computation, and business logic lives in the backend.
+    The frontend is a pure presentation layer; it never computes dates or revision schedules.
+
+    ## Key Invariants
+    - `tags` fields are always arrays (never comma-strings).
+    - `companies` objects are always `{name, slug, count}`.
+    - `dateSolved` and `nextRevisionDate` are **always server-computed** — never send them from the frontend.
+    - `status=Unsolved` is a **destructive reset** — clears notes, pattern, solutionLink, confidence.
+
+  contact:
+    name: Tacker Support
+    url: https://github.com/vikramadtya/problem-sorter
 
 servers:
   - url: https://api.tacker.dev/api/v1
@@ -16,14 +26,68 @@ servers:
 security:
   - BearerAuth: []
 
+tags:
+  - name: Questions
+    description: Browse and filter the question catalogue
+  - name: Progress
+    description: Track per-user question progress (SRS)
+  - name: Analytics
+    description: Stats, streaks, and heatmap data
+  - name: Metadata
+    description: Patterns, platforms, tags, and companies
+  - name: System
+    description: Health checks and utilities
+
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: >
+        Pass the NextAuth session token in the Authorization header.
+        Mock server accepts any non-empty token.
+
+  headers:
+    X-Request-ID:
+      description: UUID assigned to this request. Echo it back in error reports.
+      schema:
+        type: string
+        format: uuid
+        example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
   schemas:
+
+    # ----------------------------------------------------------------
+    # Error envelope — returned by ALL error responses
+    # ----------------------------------------------------------------
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: HTTP status code
+          example: 404
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Question 9999 not found"
+        errors:
+          type: array
+          description: Validation errors (OpenAPI schema violations)
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              message:
+                type: string
+        requestId:
+          type: string
+          format: uuid
+          description: Request ID for log correlation
 
     # ----------------------------------------------------------------
     # Core Question + Progress
@@ -31,43 +95,57 @@ components:
 
     QuestionWithProgress:
       type: object
-      required: [id, title, difficulty, isCustom]
+      required: [id, title, difficulty, isCustom, progress]
       properties:
         id:
           type: string
+          description: Unique question identifier (numeric string for LeetCode, prefixed for custom)
           example: "1"
+          minLength: 1
         title:
           type: string
+          description: Full question title
           example: "Two Sum"
+          minLength: 1
+          maxLength: 512
         url:
           type: string
+          format: uri
           example: "https://leetcode.com/problems/two-sum/"
         difficulty:
           type: string
           enum: [Easy, Medium, Hard]
+          example: Easy
         acceptanceRate:
           type: string
+          description: Acceptance rate as a formatted string
           example: "57.5%"
         frequency:
           type: number
           format: float
+          minimum: 0
           example: 100.0
         companies:
           type: array
+          description: Lowercase company slugs this question is tagged to
           items:
             type: string
+            minLength: 1
           example: ["google", "amazon", "meta"]
         isCustom:
           type: boolean
           default: false
+          description: True if this was added by the user via POST /custom-questions
         progress:
           $ref: '#/components/schemas/ProgressData'
 
     ProgressData:
       type: object
       description: >
-        Full user progress record for a question. All fields are server-authoritative —
-        never compute dates or SRS intervals on the frontend.
+        Server-authoritative progress record for a single question.
+        ALL date fields are ISO-8601 strings stamped by the server.
+        NEVER compute `dateSolved` or `nextRevisionDate` on the frontend.
+      required: [status, revise, attempts, timeSpent, tags, important]
       properties:
         status:
           type: string
@@ -77,59 +155,88 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Stamped by the server when status transitions to Solved.
+          description: >
+            ISO-8601 UTC timestamp. Stamped by the server when `status` first
+            transitions to `Solved`. Preserved on subsequent updates. Cleared on reset.
+          example: "2026-06-10T10:30:00.000Z"
         confidenceLevel:
           type: integer
           minimum: 1
           maximum: 4
           nullable: true
           description: >
-            SRS confidence: 1=Forgot (1d), 2=Hard (3d), 3=Good (7d), 4=Easy (14d)
+            SRS self-assessment score: 1=Forgot (→1d), 2=Hard (→3d), 3=Good (→7d), 4=Easy (→14d).
+          example: 3
         nextRevisionDate:
           type: string
           format: date-time
           nullable: true
-          description: Computed by server from confidenceLevel using SRS intervals.
+          description: >
+            ISO-8601 UTC timestamp. Computed by the server from `confidenceLevel` using
+            the SRS interval table. Updated whenever `revise=true` or `confidenceLevel` changes.
+          example: "2026-06-17T10:30:00.000Z"
         revise:
           type: boolean
           default: false
-          description: Whether the user has flagged this for active revision.
+          description: Whether the user has actively flagged this for SRS revision.
         attempts:
           type: integer
           minimum: 0
           default: 0
+          description: Total number of solution attempts.
+          example: 3
         timeSpent:
           type: integer
           minimum: 0
           default: 0
-          description: Total time spent in seconds.
+          description: Cumulative time spent in seconds.
+          example: 1800
         notes:
           type: string
           default: ""
+          maxLength: 50000
+          description: User's markdown notes and approach writeup.
         tags:
           type: array
           items:
             type: string
+            minLength: 1
+            maxLength: 64
           default: []
-          description: User-curated tags (array, not comma-string).
+          description: >
+            User-curated labels. Always an array — never a comma-separated string.
+          example: ["interview-favourite", "revisit"]
         pattern:
           type: string
           default: ""
-          description: Algorithmic pattern assigned by user.
+          maxLength: 128
+          description: Algorithmic pattern assigned by the user (e.g. "Two Pointers").
         solutionLink:
           type: string
+          format: uri
           default: ""
+          description: Link to the user's own solution (e.g. GitHub gist).
+          example: "https://github.com/user/solutions/blob/main/two-sum.py"
         important:
           type: boolean
           default: false
-          description: Starred / bookmarked by user.
+          description: Starred / bookmarked by the user.
 
     ProgressUpdateRequest:
       type: object
       description: >
-        Partial update to user progress. Send only the fields you want to change.
-        The server applies business rules — e.g., setting status=Solved stamps dateSolved
-        and computes nextRevisionDate from confidenceLevel.
+        Partial update to user progress. Include only the fields you want to change.
+
+        ## Server business rules
+        - `status=Solved` → stamps `dateSolved` (first solve only), computes `nextRevisionDate` from `confidenceLevel`.
+        - `status=Unsolved` → **destructive reset**: clears notes, pattern, solutionLink, confidence, dates. Preserves tags and important.
+        - `revise=true` → recomputes `nextRevisionDate` from `confidenceLevel`.
+        - `revise=false` → clears `nextRevisionDate`.
+        - `confidenceLevel` change while `revise=true` → reschedules.
+
+        ## ⚠ Do NOT send
+        - `dateSolved` — server-managed.
+        - `nextRevisionDate` — server-managed.
       properties:
         status:
           type: string
@@ -149,33 +256,33 @@ components:
           minimum: 0
         notes:
           type: string
+          maxLength: 50000
         tags:
           type: array
           items:
             type: string
+            minLength: 1
+            maxLength: 64
+          description: Always send as an array.
         pattern:
           type: string
+          maxLength: 128
         solutionLink:
           type: string
+          format: uri
         important:
           type: boolean
-        dateSolved:
-          type: string
-          format: date-time
-          nullable: true
-          description: Optional override; server stamps current time if omitted on Solved.
-        nextRevisionDate:
-          type: string
-          format: date-time
-          nullable: true
-          description: Optional override; server computes from confidenceLevel if omitted.
+      additionalProperties: false
 
     BulkProgressItem:
       type: object
       required: [id]
+      description: Single item in a bulk progress update (used by flashcard sessions).
       properties:
         id:
           type: string
+          minLength: 1
+          description: Question ID to update.
         confidenceLevel:
           type: integer
           minimum: 1
@@ -185,10 +292,14 @@ components:
           type: boolean
         notes:
           type: string
+          maxLength: 50000
         pattern:
           type: string
+          maxLength: 128
         timeSpent:
           type: integer
+          minimum: 0
+      additionalProperties: false
 
     BulkProgressRequest:
       type: object
@@ -198,16 +309,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BulkProgressItem'
+          minItems: 1
+          maxItems: 500
+          description: List of progress updates to apply atomically.
 
     BulkProgressResponse:
       type: object
+      required: [updated, results]
       properties:
         updated:
           type: integer
+          description: Number of records successfully updated.
+          example: 5
         results:
           type: array
           items:
             type: object
+            required: [id, progress]
             properties:
               id:
                 type: string
@@ -224,24 +342,42 @@ components:
             $ref: '#/components/schemas/QuestionWithProgress'
         totalCount:
           type: integer
+          minimum: 0
+          description: Total number of questions matching the filters (before pagination).
+          example: 2500
         page:
           type: integer
+          minimum: 1
+          description: Current page number.
+          example: 1
         totalPages:
           type: integer
+          minimum: 1
+          description: Total number of pages.
+          example: 50
 
     # ----------------------------------------------------------------
-    # Utilities / Metadata
+    # Metadata / Utilities
     # ----------------------------------------------------------------
 
     UtilityItem:
       type: object
+      required: [id, name]
       properties:
         id:
           type: string
+          minLength: 1
+          example: "pat-1"
         name:
           type: string
+          minLength: 1
+          maxLength: 128
+          example: "Two Pointers"
         description:
           type: string
+          default: ""
+          maxLength: 512
+          example: "Two pointers iterating through data structures."
 
     MetadataRequest:
       type: object
@@ -249,17 +385,23 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 128
         description:
           type: string
+          maxLength: 512
+      additionalProperties: false
 
     MetadataResponse:
       type: object
+      required: [item]
       properties:
         item:
           $ref: '#/components/schemas/UtilityItem'
 
     UtilitiesResponse:
       type: object
+      required: [difficulties, platforms, patterns, tags]
       properties:
         difficulties:
           type: array
@@ -284,16 +426,20 @@ components:
 
     CompanyItem:
       type: object
+      required: [name, slug, count]
       properties:
         name:
           type: string
-          example: "google"
+          description: Human-readable display name (may be capitalized)
+          example: "Google"
         slug:
           type: string
+          description: Lowercase URL-safe slug used as filter value
           example: "google"
         count:
           type: integer
-          description: Number of questions associated with this company.
+          minimum: 0
+          description: Number of questions tagged with this company.
           example: 42
 
     # ----------------------------------------------------------------
@@ -307,18 +453,26 @@ components:
         id:
           type: string
           nullable: true
+          description: Optional custom ID. Server generates one if omitted.
         title:
           type: string
+          minLength: 1
+          maxLength: 512
         link:
           type: string
+          format: uri
+          description: URL to the problem (any platform).
         difficulty:
           type: string
           enum: [Easy, Medium, Hard]
           default: Medium
         platform:
           type: string
+          maxLength: 128
+          description: Platform name (e.g. "HackerRank", "CodeForces").
         pattern:
           type: string
+          maxLength: 128
         confidenceLevel:
           type: integer
           minimum: 1
@@ -326,21 +480,25 @@ components:
           nullable: true
         timeTaken:
           type: integer
+          minimum: 0
           nullable: true
-          description: Time taken in minutes.
+          description: Time spent in minutes (converted to seconds server-side).
         tags:
-          oneOf:
-            - type: array
-              items:
-                type: string
-            - type: string
-          description: Tags as array or comma-separated string.
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          description: Always send as an array.
+      additionalProperties: false
 
     CustomQuestionResponse:
       type: object
+      required: [success, question]
       properties:
         success:
           type: boolean
+          example: true
         question:
           $ref: '#/components/schemas/QuestionWithProgress'
 
@@ -350,45 +508,81 @@ components:
 
     NameCountPair:
       type: object
+      required: [name, count]
       properties:
         name:
           type: string
         count:
           type: integer
+          minimum: 0
 
     DifficultyBreakdown:
       type: object
+      required: [Easy, Medium, Hard]
       properties:
         Easy:
           type: integer
+          minimum: 0
+          example: 12
         Medium:
           type: integer
+          minimum: 0
+          example: 8
         Hard:
           type: integer
+          minimum: 0
+          example: 3
 
     StatsResponse:
       type: object
-      description: Lightweight stats — StatsBar, streak widget, heatmap. Cached server-side.
+      required: [totalSolved, totalAttempted, totalQuestions, totalRevise, currentStreak, maxStreak, weeklyCount, difficultyBreakdown]
+      description: >
+        Lightweight stats for StatsBar, streak widget, and heatmap.
+        Cached server-side and invalidated on every progress update.
+        Use this endpoint from Tracker and Explore pages — not /analytics.
       properties:
         totalSolved:
           type: integer
+          minimum: 0
+          example: 23
         totalAttempted:
           type: integer
+          minimum: 0
+          example: 5
         totalQuestions:
           type: integer
+          minimum: 0
+          example: 2650
         totalRevise:
           type: integer
+          minimum: 0
+          description: Count of questions flagged for revision (revise=true OR past due date).
+          example: 4
         currentStreak:
           type: integer
+          minimum: 0
+          description: Current consecutive-day solving streak.
+          example: 7
         maxStreak:
           type: integer
+          minimum: 0
+          description: All-time longest streak.
+          example: 14
         weeklyCount:
           type: integer
+          minimum: 0
+          description: Number of problems solved in the last 7 days.
+          example: 5
         activityTimeline:
           type: object
+          nullable: true
           additionalProperties:
             type: integer
-          description: Map of date (YYYY-MM-DD) → solved count.
+            minimum: 0
+          description: >
+            Sparse map of date string (YYYY-MM-DD) to number of problems solved on that date.
+            Only dates with at least 1 solve are present.
+          example: {"2026-06-10": 3, "2026-06-09": 1}
         difficultyBreakdown:
           $ref: '#/components/schemas/DifficultyBreakdown'
 
@@ -396,41 +590,59 @@ components:
       allOf:
         - $ref: '#/components/schemas/StatsResponse'
         - type: object
-          description: Full analytics including charts — only fetched by Dashboard.
+          required: [topCompanies, platformsBreakdown, avgTimePerDiff, patternMasteryData, revisionList]
+          description: >
+            Full analytics payload — superset of StatsResponse.
+            Only fetched by the Dashboard page. Contains chart data.
           properties:
             topCompanies:
               type: array
+              description: Top 15 companies by number of solved questions.
               items:
                 $ref: '#/components/schemas/NameCountPair'
             platformsBreakdown:
               type: array
+              description: Solved count grouped by platform.
               items:
                 $ref: '#/components/schemas/NameCountPair'
             avgTimePerDiff:
               type: array
+              description: Average solving time in minutes, grouped by difficulty.
               items:
                 type: object
+                required: [name, avgMinutes]
                 properties:
                   name:
                     type: string
+                    enum: [Easy, Medium, Hard]
                   avgMinutes:
                     type: integer
+                    minimum: 0
             patternMasteryData:
               type: array
+              description: >
+                Top 10 patterns sorted by solve count.
+                `score` is mastery percentage (0–100).
               items:
                 type: object
+                required: [name, solved, score]
                 properties:
                   name:
                     type: string
                   solved:
                     type: integer
+                    minimum: 0
                   score:
                     type: integer
-                    description: Mastery percentage (0-100).
+                    minimum: 0
+                    maximum: 100
             revisionList:
               type: array
+              description: >
+                Up to 20 questions due for revision, sorted by nextRevisionDate ascending.
               items:
                 type: object
+                required: [id, title, difficulty]
                 properties:
                   id:
                     type: string
@@ -438,9 +650,44 @@ components:
                     type: string
                   difficulty:
                     type: string
+                    enum: [Easy, Medium, Hard]
                   nextRevisionDate:
                     type: string
+                    format: date-time
                     nullable: true
+
+    # ----------------------------------------------------------------
+    # Health
+    # ----------------------------------------------------------------
+
+    HealthResponse:
+      type: object
+      required: [status, uptime, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          example: ok
+        uptime:
+          type: integer
+          description: Server uptime in seconds.
+          example: 3600
+        questionsLoaded:
+          type: integer
+          example: 2650
+        companiesIndexed:
+          type: integer
+          example: 310
+        progressRecords:
+          type: integer
+          example: 47
+        analyticsCached:
+          type: boolean
+          example: true
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-06-10T10:30:00.000Z"
 
 # ----------------------------------------------------------------
 # PATHS
@@ -451,128 +698,175 @@ paths:
   /questions:
     get:
       operationId: getQuestions
+      tags: [Questions]
       summary: Get paginated, filtered, sorted questions with user progress
       description: >
         Server-side filtering and sorting. Uses in-memory indexes for O(1)
-        company and difficulty lookups. The UI consumes the output directly.
+        company and difficulty lookups. The UI consumes the output directly
+        without any client-side filtering.
+
+        ## Filter logic
+        - `trackerMode=true` → only questions the user has engaged with (solved, attempted, starred, or marked for revision).
+        - `reviseFilter=true` → only questions where `revise=true` OR `nextRevisionDate` is in the past.
+        - Boolean parameters must be sent as the string literals `'true'` or `'false'` (OpenAPI query param convention).
       parameters:
         - name: page
           in: query
           schema:
             type: integer
+            minimum: 1
             default: 1
         - name: limit
           in: query
           schema:
             type: integer
-            default: 50
+            minimum: 1
             maximum: 5000
+            default: 50
         - name: search
           in: query
+          description: Case-insensitive substring match on question title.
           schema:
             type: string
+            maxLength: 256
           allowReserved: true
         - name: difficulty
           in: query
           schema:
             type: string
             enum: [Easy, Medium, Hard, all]
+            default: all
         - name: company
           in: query
+          description: Company slug (lowercase) or "all".
           schema:
             type: string
+            maxLength: 128
           allowReserved: true
-          description: Company slug (lowercase) or "all" or "Custom Questions".
         - name: tag
           in: query
+          description: Case-insensitive substring match on user tags.
           schema:
             type: string
+            maxLength: 128
           allowReserved: true
         - name: pattern
           in: query
+          description: Exact match on algorithmic pattern name.
           schema:
             type: string
+            maxLength: 128
           allowReserved: true
         - name: status
           in: query
           schema:
             type: string
             enum: [Unsolved, Attempted, Solved, all]
+            default: all
         - name: starredOnly
           in: query
+          description: Filter to only starred (important=true) questions.
           schema:
             type: string
             enum: ['true', 'false']
         - name: hideSolved
           in: query
+          description: Exclude questions with status=Solved.
           schema:
             type: string
             enum: ['true', 'false']
         - name: reviseFilter
           in: query
+          description: >
+            Filter to questions needing revision (revise=true OR past nextRevisionDate).
           schema:
             type: string
             enum: ['true', 'false']
         - name: trackerMode
           in: query
+          description: >
+            When 'true', returns only questions the user has interacted with
+            (solved, attempted, starred, or marked for revision).
           schema:
             type: string
             enum: ['true', 'false']
-          description: >
-            When true, returns only questions the user has interacted with
-            (solved, attempted, starred, or marked for revision).
         - name: sortBy
           in: query
+          description: >
+            Column to sort by. Valid values: id, title, difficulty, frequency,
+            acceptanceRate, dateSolved, attempts, timeSpent, revise.
           schema:
             type: string
+            enum: [id, title, difficulty, frequency, acceptanceRate, dateSolved, attempts, timeSpent, revise]
           allowReserved: true
         - name: sortDirection
           in: query
           schema:
             type: string
             enum: [asc, desc]
+            default: asc
       responses:
         '200':
-          description: Paginated question list with progress
+          description: Paginated question list with embedded progress
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedQuestionsResponse'
         '401':
-          description: Unauthorized
+          description: Unauthorized — missing or invalid Bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /progress/{questionId}:
+    parameters:
+      - name: questionId
+        in: path
+        required: true
+        description: Question ID (matches `QuestionWithProgress.id`)
+        schema:
+          type: string
+          minLength: 1
+
     get:
       operationId: getProgress
+      tags: [Progress]
       summary: Get progress for a single question
-      parameters:
-        - name: questionId
-          in: path
-          required: true
-          schema:
-            type: string
       responses:
         '200':
-          description: Progress record
+          description: Full progress record for this question
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProgressData'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Question not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     patch:
       operationId: updateProgress
-      summary: Update progress for a question (upsert)
+      tags: [Progress]
+      summary: Upsert progress for a question (partial update)
       description: >
-        Server applies all business rules. status=Unsolved resets all fields.
-        status=Solved stamps dateSolved and computes nextRevisionDate from confidenceLevel.
-        revise=true computes nextRevisionDate from confidenceLevel via SRS intervals.
-      parameters:
-        - name: questionId
-          in: path
-          required: true
-          schema:
-            type: string
+        Server applies all business rules. See `ProgressUpdateRequest` for the full rule set.
+
+        **Do not send** `dateSolved` or `nextRevisionDate` — they are always server-computed.
       requestBody:
         required: true
         content:
@@ -581,19 +875,46 @@ paths:
               $ref: '#/components/schemas/ProgressUpdateRequest'
       responses:
         '200':
-          description: Full updated progress record (use this as source of truth)
+          description: >
+            Full server-authoritative progress record. The frontend MUST replace
+            local state with this response (not the request payload) to capture
+            server-computed fields.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProgressData'
+        '400':
+          description: Validation error (e.g. unknown fields, invalid enum values)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Question not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /progress/bulk:
     post:
       operationId: bulkUpdateProgress
-      summary: Batch update progress for multiple questions
-      description: Used by flashcard mode to save multiple confidence updates at once.
+      tags: [Progress]
+      summary: Batch-update progress for multiple questions in one request
+      description: >
+        Used by the Flashcard mode to commit all confidence score changes at
+        the end of a session — a single network round-trip instead of N PATCHes.
+        Each item in the `updates` array goes through the same SRS state machine
+        as `PATCH /progress/{id}`.
       requestBody:
         required: true
         content:
@@ -602,70 +923,118 @@ paths:
               $ref: '#/components/schemas/BulkProgressRequest'
       responses:
         '200':
-          description: Batch update results
+          description: Results for each updated question
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkProgressResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /stats:
     get:
       operationId: getStats
-      summary: Lightweight stats (StatsBar, streak, heatmap)
+      tags: [Analytics]
+      summary: Lightweight stats (StatsBar, streak widget, heatmap)
       description: >
-        Cached server-side. Returns only the stats needed by the main page
-        widgets — much faster than full analytics. Cache invalidated on any
-        progress update.
+        Cached server-side. Invalidated on every progress update.
+        Call this from Tracker and Explore pages.
+        Do NOT use `/analytics` for these pages — it is heavier.
       responses:
         '200':
-          description: Stats response
+          description: Lightweight stats bundle
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatsResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /analytics:
     get:
       operationId: getAnalytics
-      summary: Full analytics for Dashboard
+      tags: [Analytics]
+      summary: Full analytics payload (Dashboard only)
       description: >
-        Complete analytics including charts data. Cached server-side.
-        Only call this from the Dashboard page.
+        Superset of `/stats`. Includes chart data (topCompanies, patternMastery, etc.).
+        Cached server-side. Only call this from the Dashboard page.
       responses:
         '200':
-          description: Full analytics
+          description: Full analytics bundle
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalyticsResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /utilities:
     get:
       operationId: getUtilities
-      summary: Get system utilities (difficulties, patterns, platforms, tags)
+      tags: [Metadata]
+      summary: Get all system utilities in one call (difficulties, patterns, platforms, tags)
+      description: >
+        Batch utility endpoint to minimise startup round-trips.
+        Call once on page mount and cache the result.
       responses:
         '200':
-          description: Utilities bundle
+          description: All utility collections bundled
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UtilitiesResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /companies:
     get:
       operationId: getCompanies
+      tags: [Metadata]
       summary: Get all companies sorted by question count
+      description: >
+        Returns enriched company objects `{name, slug, count}`.
+        The `slug` is the lowercase filter value; `name` is for display.
+        Always includes a "Custom Questions" pseudo-company at index 0.
       responses:
         '200':
-          description: Enriched company list
+          description: Company list sorted by question count descending
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
@@ -674,11 +1043,20 @@ paths:
                   $ref: '#/components/schemas/CompanyItem'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /custom-questions:
     post:
       operationId: createCustomQuestion
+      tags: [Questions]
       summary: Create a custom tracked question
+      description: >
+        Adds a user-defined question to the catalogue and immediately
+        creates a progress record for it. The question appears in the
+        Tracker and in the "Custom Questions" company filter.
       requestBody:
         required: true
         content:
@@ -686,19 +1064,33 @@ paths:
             schema:
               $ref: '#/components/schemas/CustomQuestionRequest'
       responses:
-        '200':
-          description: Created question with initial progress
+        '201':
+          description: Created question with initial progress record
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomQuestionResponse'
+        '400':
+          description: Validation error (e.g. missing title)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /patterns:
     get:
       operationId: getPatterns
-      summary: Get all patterns
+      tags: [Metadata]
+      summary: Get all algorithmic patterns
       responses:
         '200':
           description: Pattern list
@@ -710,9 +1102,14 @@ paths:
                   $ref: '#/components/schemas/UtilityItem'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       operationId: createPattern
-      summary: Create a new pattern
+      tags: [Metadata]
+      summary: Create a new algorithmic pattern
       requestBody:
         required: true
         content:
@@ -720,18 +1117,29 @@ paths:
             schema:
               $ref: '#/components/schemas/MetadataRequest'
       responses:
-        '200':
+        '201':
           description: Created pattern
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MetadataResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /platforms:
     get:
       operationId: getPlatforms
+      tags: [Metadata]
       summary: Get all platforms
       responses:
         '200':
@@ -744,8 +1152,13 @@ paths:
                   $ref: '#/components/schemas/UtilityItem'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       operationId: createPlatform
+      tags: [Metadata]
       summary: Create a new platform
       requestBody:
         required: true
@@ -754,19 +1167,30 @@ paths:
             schema:
               $ref: '#/components/schemas/MetadataRequest'
       responses:
-        '200':
+        '201':
           description: Created platform
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MetadataResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /tags:
     get:
       operationId: getTags
-      summary: Get all tags
+      tags: [Metadata]
+      summary: Get all user-defined tags
       responses:
         '200':
           description: Tag list
@@ -778,8 +1202,13 @@ paths:
                   $ref: '#/components/schemas/UtilityItem'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       operationId: createTag
+      tags: [Metadata]
       summary: Create a new tag
       requestBody:
         required: true
@@ -788,11 +1217,44 @@ paths:
             schema:
               $ref: '#/components/schemas/MetadataRequest'
       responses:
-        '200':
+        '201':
           description: Created tag
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MetadataResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      operationId: getHealth
+      tags: [System]
+      summary: Server health check
+      description: >
+        Returns server uptime and runtime statistics.
+        Does NOT require authentication — safe for load-balancer probes.
+      security: []
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Server is degraded or unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'

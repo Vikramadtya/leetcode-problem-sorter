@@ -236,6 +236,7 @@ class ApiClient {
         body: JSON.stringify(data),
       });
       if (res.status === 401) { this._handle401(); return null; }
+      // Expects 201 Created
       if (!res.ok) throw new Error(await parseError(res));
       return await res.json();
     } catch (error) {
@@ -267,6 +268,7 @@ class ApiClient {
         headers: await this.getHeaders(),
         body: JSON.stringify(data),
       });
+      // Expects 201 Created
       if (!res.ok) throw new Error(await parseError(res));
       return await res.json();
     } catch (error) {

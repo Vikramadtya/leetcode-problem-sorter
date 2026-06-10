@@ -29,6 +29,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// MS-3.3: Attach X-Request-ID to every response
+app.use((req, res, next) => {
+  res.setHeader('X-Request-ID', req.requestId);
+  next();
+});
+
 app.use(
   OpenApiValidator.middleware({
     apiSpec: path.join(__dirname, '../api-contract/openapi.yaml'),
@@ -407,13 +413,17 @@ app.patch('/api/v1/progress/:id', (req, res) => {
       important: existing.important || false,
     };
   } else if (updates.status === 'Solved') {
-    const dateSolved = updates.dateSolved || existing.dateSolved || new Date().toISOString();
+    // dateSolved: preserve existing (already solved) or stamp now (first solve)
+    // NEVER accept client-supplied dateSolved — server is authoritative
+    const dateSolved = existing.dateSolved || new Date().toISOString();
     const confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
-    const nextRevisionDate = updates.nextRevisionDate || calcNextRevisionDate(confidenceLevel);
+    const nextRevisionDate = calcNextRevisionDate(confidenceLevel);
     const tags = normalizeTags(updates.tags, existing.tags);
+    // Destructure dateSolved/nextRevisionDate out of updates to prevent override
+    const { dateSolved: _ds, nextRevisionDate: _nrd, ...safeUpdates } = updates;
     newProgress = {
       ...existing,
-      ...updates,
+      ...safeUpdates,
       status: 'Solved',
       dateSolved,
       confidenceLevel,
@@ -450,26 +460,49 @@ app.patch('/api/v1/progress/:id', (req, res) => {
 // POST /api/v1/progress/bulk  — batch update (flashcard mode)
 // ============================================================
 app.post('/api/v1/progress/bulk', (req, res) => {
-  const { updates } = req.body; // [{ id, ...fields }]
-  if (!Array.isArray(updates)) {
-    return res.status(400).json({ message: 'updates must be an array' });
+  const { updates } = req.body;
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return res.status(400).json({ code: 400, message: 'updates must be a non-empty array', requestId: req.requestId });
   }
 
   const results = [];
-  for (const { id, ...fields } of updates) {
-    if (!id) continue;
+  let skipped = 0;
+
+  for (const item of updates) {
+    const { id, ...fields } = item;
+    if (!id) { skipped++; continue; }
+    if (!questionMap.has(id)) { skipped++; continue; } // skip orphans silently
+
     const existing = progressMap.get(id) || {};
-    const merged = { ...existing, ...fields };
-    if (Array.isArray(fields.tags)) merged.tags = fields.tags;
-    else if (typeof fields.tags === 'string') merged.tags = fields.tags.split(',').map(t => t.trim()).filter(Boolean);
+    let merged;
+
+    // Apply same SRS state machine as PATCH
+    if (fields.revise === true) {
+      const confidenceLevel = fields.confidenceLevel || existing.confidenceLevel || 3;
+      const nextRevisionDate = calcNextRevisionDate(confidenceLevel);
+      const tags = normalizeTags(fields.tags, existing.tags);
+      merged = { ...existing, ...fields, revise: true, confidenceLevel, nextRevisionDate, tags };
+    } else if (fields.revise === false) {
+      const tags = normalizeTags(fields.tags, existing.tags);
+      merged = { ...existing, ...fields, revise: false, nextRevisionDate: null, tags };
+    } else if (fields.confidenceLevel !== undefined && existing.revise) {
+      // Reschedule when confidence changes and already in revision
+      const tags = normalizeTags(fields.tags, existing.tags);
+      merged = { ...existing, ...fields, nextRevisionDate: calcNextRevisionDate(fields.confidenceLevel), tags };
+    } else {
+      const tags = normalizeTags(fields.tags, existing.tags);
+      merged = { ...existing, ...fields, tags };
+    }
+
     progressMap.set(id, merged);
     results.push({ id, progress: formatProgress(merged) });
   }
 
   invalidateAnalyticsCache();
   saveProgress();
-  res.json({ updated: results.length, results });
+  res.json({ updated: results.length, skipped, results });
 });
+
 
 // ============================================================
 // GET /api/v1/stats  — lightweight stats for StatsBar/streak
@@ -736,14 +769,14 @@ app.post('/api/v1/custom-questions', (req, res) => {
   invalidateAnalyticsCache();
   saveProgress();
 
-  res.json({ success: true, question: formatQuestion(customQ, progress) });
+  res.status(201).json({ success: true, question: formatQuestion(customQ, progress) });
 });
 
 // ============================================================
 // METADATA ROUTES  (patterns, platforms, tags)
 // ============================================================
 function setupMetadataRoute(routePath, dataArray) {
-  app.get(`/api/v1/${routePath}`, (req, res) => res.json(dataArray));
+  app.get(`/api/v1/${routePath}`, (_req, res) => res.json(dataArray));
 
   app.post(`/api/v1/${routePath}`, (req, res) => {
     const newItem = {
@@ -752,7 +785,8 @@ function setupMetadataRoute(routePath, dataArray) {
       description: req.body.description || '',
     };
     dataArray.push(newItem);
-    res.json({ item: newItem });
+    // 201 Created per API contract
+    res.status(201).json({ item: newItem });
   });
 }
 
