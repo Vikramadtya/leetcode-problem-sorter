@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import styles from './MiniInsights.module.css';
+import Confetti from 'react-confetti';
+import { useWindowSize } from 'react-use';
 
 // Re-use utility function for difficulties
 function getDiffColor(diff) {
@@ -39,6 +41,25 @@ export default function MiniInsights({ stats = {} }) {
   
   const dailyPercent = Math.min(100, Math.round((dailyCount / DAILY_GOAL) * 100));
   const weeklyPercent = Math.min(100, Math.round((weeklyCount / WEEKLY_GOAL) * 100));
+
+  const { width, height } = useWindowSize();
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  useEffect(() => {
+    if (dailyPercent >= 100 && dailyCount > 0) {
+      setShowConfetti(true);
+      const timer = setTimeout(() => setShowConfetti(false), 5000); // 5 seconds of confetti
+      return () => clearTimeout(timer);
+    }
+  }, [dailyPercent, dailyCount]);
+
+  // Determine Emojis based on progress
+  const getEmoji = (percent) => {
+    if (percent >= 100) return '🎉'; // Celebration
+    if (percent >= 50) return '😄';  // Happy
+    if (percent > 0) return '🙂';    // Slight smile
+    return '😢';                      // Sad (0%)
+  };
 
   // 4. Difficulty Breakdown
   const easy = stats.easy || 0;
@@ -106,7 +127,7 @@ export default function MiniInsights({ stats = {} }) {
         {/* ── 3. Daily Goal ── */}
         <div className={styles.widget}>
           <div className={styles.widgetHeader}>
-            <span aria-hidden="true">🔥</span> Daily Goal
+            <span aria-hidden="true">{getEmoji(dailyPercent)}</span> Daily Goal
           </div>
           <div className={styles.widgetContent}>
             <div className={styles.goalHeader}>
@@ -126,7 +147,7 @@ export default function MiniInsights({ stats = {} }) {
         {/* ── 4. Weekly Goal ── */}
         <div className={styles.widget}>
           <div className={styles.widgetHeader}>
-            <span aria-hidden="true">🎯</span> Weekly Goal
+            <span aria-hidden="true">{getEmoji(weeklyPercent)}</span> Weekly Goal
           </div>
           <div className={styles.widgetContent}>
             <div className={styles.goalHeader}>
@@ -184,6 +205,7 @@ export default function MiniInsights({ stats = {} }) {
         </div>
 
       </div>
+      {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={500} gravity={0.2} />}
     </div>
   );
 }

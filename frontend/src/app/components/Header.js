@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
 import ThemeToggle from './ThemeToggle';
+import { useAppStore } from '../../store/useAppStore';
 import config from '../../config.json';
 import styles from './Header.module.css';
 

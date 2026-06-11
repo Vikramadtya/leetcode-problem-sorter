@@ -35,7 +35,9 @@ import ReflectionModal       from './ReflectionModal';
 import NotesModal            from './NotesModal';
 import InitialSolveModal     from './InitialSolveModal';
 import WrapUpModal           from './WrapUpModal';
+import FlashcardMode         from './FlashcardMode';
 import ActiveAttemptModal    from './ActiveAttemptModal';
+import FloatingGoalWidget    from './FloatingGoalWidget';
 import MiniInsights          from './MiniInsights';
 import ProblemFilterToolbar  from './ProblemFilterToolbar';
 import TableSkeleton         from './TableSkeleton';
@@ -395,6 +397,11 @@ export default function TrackerPageShell({
         <footer className={styles.footer}>
           Made with <span className={styles.heart}>❤️</span> for the community.
         </footer>
+      )}
+
+      {/* ── Floating Goal Widget ────────────────────────────────────────────── */}
+      {authEnabled && hasActivity && (
+        <FloatingGoalWidget />
       )}
     </div>
   );
