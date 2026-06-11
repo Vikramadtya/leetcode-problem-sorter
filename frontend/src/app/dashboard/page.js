@@ -1,271 +1,346 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * Dashboard page — /dashboard
+ *
+ * Displays full analytics for the authenticated user.
+ * Now extended to include all requested insights:
+ *  - Problem Status Overview (Pie)
+ *  - Confidence vs Difficulty (Bar)
+ *  - Pattern Usage Frequency & Problems by Pattern
+ *  - Tags Frequency & Problems by Tag
+ *  - Problems Solved Over Time (Area Chart)
+ *  - Time Per Difficulty Over Time (Line Chart)
+ *  - Patterns Most Revised (Bar)
+ *  - Confidence to Problem Count (Bar)
+ */
+
+import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import Header from '../components/Header';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, LineChart, Line
 } from 'recharts';
+import Header from '../components/Header';
 import Heatmap from '../components/Heatmap';
-import { apiClient } from '../../lib/api/apiClient';
+import { useAppStore } from '../../store/useAppStore';
 import styles from './page.module.css';
 
-const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
+const DIFF_COLORS  = ['#10b981', '#f59e0b', '#ef4444'];
+const STATUS_COLORS = ['#3b82f6', '#f59e0b', '#6b7280'];
+const CONFIDENCE_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'];
+
+const tooltipStyle = {
+  contentStyle: {
+    backgroundColor: 'var(--bg-card)',
+    borderColor:     'var(--border-color)',
+    borderRadius:    '8px',
+  },
+  itemStyle: { color: 'var(--text-main)' },
+  cursor:    { fill: 'var(--bg-main)' },
+};
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [analytics, setAnalytics] = useState(null);
-  const [loading, setLoading] = useState(true);
+
+  const { stats, fetchStats, isLoading } = useAppStore();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/');
       return;
     }
-
     if (status === 'authenticated') {
-      apiClient.getAnalytics()
-        .then(data => {
-          setAnalytics(data);
-          setLoading(false);
-        })
-        .catch(err => {
-          // Errors handled by apiClient toast
-          setLoading(false);
-        });
+      fetchStats();
     }
-  }, [status, router]);
+  }, [status, router, fetchStats]);
 
-  if (loading) {
+  if (status === 'loading' || (isLoading && !stats.activityTimeline)) {
     return (
       <div className={styles.container}>
         <Header authEnabled={true} />
         <main className={styles.main}>
-          <div className={styles.loading}>Loading your insights...</div>
+          <div className={styles.loading}>Loading your insights…</div>
         </main>
       </div>
     );
   }
 
-  if (!analytics || analytics.error) {
+  if (!stats || (stats.solved === 0 && stats.attempted === 0 && !stats.activityTimeline)) {
     return (
       <div className={styles.container}>
         <Header authEnabled={true} />
         <main className={styles.main}>
           <div className={styles.error}>
-            Unable to load dashboard. Is the mock server running at port 4000?
+            No data yet — solve some problems to see your insights!
           </div>
         </main>
       </div>
     );
   }
 
-  // Safe defaults prevent crashes if server returns partial data
-  const breakdown = analytics?.difficultyBreakdown || { Easy: 0, Medium: 0, Hard: 0 };
-  const difficultyData = [
-    { name: 'Easy',   value: breakdown.Easy   ?? 0 },
-    { name: 'Medium', value: breakdown.Medium  ?? 0 },
-    { name: 'Hard',   value: breakdown.Hard    ?? 0 },
-  ];
+  const analytics = stats._raw || {};
 
-  const completionPercent = ((analytics.totalSolved / Math.max(analytics.totalQuestions ?? 1, 1)) * 100).toFixed(1);
-  const topCompanies    = analytics.topCompanies       || [];
-  const patternMastery  = analytics.patternMasteryData || [];
-  const revisionList    = analytics.revisionList       || [];
-  const avgTimePerDiff  = analytics.avgTimePerDiff     || [];
-  const platformsData   = analytics.platformsBreakdown || [];
+  const totalQs = analytics.totalQuestions || 0;
+  const totalSolved = analytics.totalSolved || 0;
+  const completionPercent = totalQs > 0 ? ((totalSolved / totalQs) * 100).toFixed(1) : '0.0';
+
+  const difficultyData = [
+    { name: 'Easy',   value: analytics.difficultyBreakdown?.Easy   || 0 },
+    { name: 'Medium', value: analytics.difficultyBreakdown?.Medium || 0 },
+    { name: 'Hard',   value: analytics.difficultyBreakdown?.Hard   || 0 },
+  ];
 
   return (
     <div className={styles.container}>
       <Header authEnabled={true} />
       <main className={styles.main}>
         <h1 className={styles.title}>Your Preparation Insights</h1>
-        
-        {analytics && (
-          <div className={styles.motivationBanner}>
-            <h3>AI Coach</h3>
-            <p>
-              {analytics.totalRevise === 0 
-                ? "🌟 Your revision queue is completely clear! Great job. Time to learn something new or tackle a hard problem."
-                : `🎯 You have ${analytics.totalRevise} problems due for revision. Knock them out to solidify your memory.`}
-            </p>
-          {analytics.patternMasteryData && analytics.patternMasteryData.length > 0 && (
-              <p>
-                💪 You are strongest in <strong>{analytics.patternMasteryData[0].name}</strong> with a {analytics.patternMasteryData[0].score}% mastery. Keep it up!
-              </p>
-            )}
-          </div>
-        )}
-        
-        <div className={styles.summaryGrid}>
+
+        {/* ── Summary cards ────────────────────────────────────────────── */}
+        <div className={styles.summaryGrid} style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
           <div className={styles.summaryCard}>
             <h3>Total Solved</h3>
-            <p className={styles.metric}>{analytics.totalSolved} <span className={styles.subtext}>/ {analytics.totalQuestions}</span></p>
+            <p className={styles.metric}>{totalSolved}</p>
             <div className={styles.progressBar}>
-              <div className={styles.progressFill} style={{ width: `${completionPercent}%` }}></div>
+              <div className={styles.progressFill} style={{ width: `${completionPercent}%` }} />
             </div>
             <p className={styles.percent}>{completionPercent}% Completion</p>
           </div>
           <div className={styles.summaryCard}>
+            <h3>Total Attempted</h3>
+            <p className={styles.metric}>{analytics.totalAttempted || 0}</p>
+          </div>
+          <div className={styles.summaryCard}>
             <h3>Due Revisions</h3>
-            <p className={styles.metric}>{analytics.totalRevise}</p>
-            <p className={styles.subtext}>Problems flagged for review</p>
+            <p className={styles.metric}>{analytics.totalRevise || 0}</p>
+          </div>
+          <div className={styles.summaryCard}>
+            <h3>Favourites</h3>
+            <p className={styles.metric}>{analytics.totalFavourite || 0}</p>
           </div>
         </div>
 
-        <div className={styles.chartsGrid}>
+        {/* ── Activity heatmap ─────────────────────────────────────────── */}
+        {analytics.activityTimeline && (
+          <div className={styles.chartCard} style={{ marginTop: '2rem' }}>
+            <h3>Calendar (Activity Heatmap)</h3>
+            <Heatmap data={analytics.activityTimeline} />
+          </div>
+        )}
+
+        <div className={styles.chartsGrid} style={{ marginTop: '2rem' }}>
+          
+          {/* Problem Status Overview */}
           <div className={styles.chartCard}>
-            <h3>Difficulty Breakdown</h3>
+            <h3>Problem Status Overview</h3>
             <div className={styles.chartWrapper}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <PieChart>
-                  <Pie
-                    data={difficultyData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {difficultyData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
+                  <Pie data={analytics.problemStatusOverview || []} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="count" nameKey="name">
+                    {(analytics.problemStatusOverview || []).map((_, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]} />)}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                    itemStyle={{ color: 'var(--text-main)' }}
-                  />
+                  <Tooltip {...tooltipStyle} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
 
+          {/* Difficulty Breakdown */}
+          <div className={styles.chartCard}>
+            <h3>Difficulty Breakdown</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <PieChart>
+                  <Pie data={difficultyData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    {difficultyData.map((_, i) => <Cell key={i} fill={DIFF_COLORS[i % DIFF_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...tooltipStyle} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Platforms pie */}
+          <div className={styles.chartCard}>
+            <h3>Platform Usage</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <PieChart>
+                  <Pie data={analytics.platformsBreakdown || []} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="count" nameKey="name">
+                    {(analytics.platformsBreakdown || []).map((_, i) => <Cell key={i} fill={DIFF_COLORS[i % DIFF_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...tooltipStyle} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Confidence vs Difficulty */}
+          <div className={styles.chartCard}>
+            <h3>Confidence vs Difficulty</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={analytics.confidenceVsDifficulty || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                  <XAxis dataKey="difficulty" stroke="var(--text-muted)" />
+                  <YAxis stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Legend />
+                  <Bar dataKey="level1" stackId="a" name="Conf: 1" fill={CONFIDENCE_COLORS[0]} />
+                  <Bar dataKey="level2" stackId="a" name="Conf: 2" fill={CONFIDENCE_COLORS[1]} />
+                  <Bar dataKey="level3" stackId="a" name="Conf: 3" fill={CONFIDENCE_COLORS[2]} />
+                  <Bar dataKey="level4" stackId="a" name="Conf: 4" fill={CONFIDENCE_COLORS[3]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Problems Solved Over Time */}
+          <div className={`${styles.chartCard} ${styles.chartCardFull}`}>
+            <h3>Problems Solved Over Time</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <AreaChart data={analytics.problemsSolvedOverTime || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" stroke="var(--text-muted)" />
+                  <YAxis stroke="var(--text-muted)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Area type="monotone" dataKey="count" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCount)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Time Per Difficulty Over Time */}
+          <div className={`${styles.chartCard} ${styles.chartCardFull}`}>
+            <h3>Time Per Difficulty Over Time (mins)</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <LineChart data={analytics.timePerDiffOverTime || []} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" stroke="var(--text-muted)" />
+                  <YAxis stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Legend />
+                  <Line type="monotone" dataKey="Easy" stroke={DIFF_COLORS[0]} />
+                  <Line type="monotone" dataKey="Medium" stroke={DIFF_COLORS[1]} />
+                  <Line type="monotone" dataKey="Hard" stroke={DIFF_COLORS[2]} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Top companies bar */}
           <div className={styles.chartCard}>
             <h3>Top Companies (Solved)</h3>
             <div className={styles.chartWrapper}>
-              {topCompanies.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topCompanies} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
-                    <XAxis type="number" stroke="var(--text-muted)" />
-                    <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
-                    <Tooltip 
-                      cursor={{fill: 'var(--bg-main)'}}
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                    />
-                    <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className={styles.emptyChart}>Solve problems to see company stats!</div>
-              )}
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={analytics.topCompanies || []} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
+                  <XAxis type="number" stroke="var(--text-muted)" />
+                  <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
+          {/* Pattern Usage Frequency */}
           <div className={styles.chartCard}>
-            <h3>Platforms Breakdown</h3>
+            <h3>Pattern Usage Frequency</h3>
             <div className={styles.chartWrapper}>
-              {platformsData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={platformsData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="count"
-                      nameKey="name"
-                    >
-                      {platformsData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                      itemStyle={{ color: 'var(--text-main)' }}
-                    />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className={styles.emptyChart}>No platform data yet.</div>
-              )}
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={(analytics.patternUsageFrequency || []).slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
+                  <XAxis type="number" stroke="var(--text-muted)" />
+                  <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="count" fill="var(--success)" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
+
+          {/* Tags Frequency */}
+          <div className={styles.chartCard}>
+            <h3>Tags Frequency</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={(analytics.tagsFrequency || []).slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
+                  <XAxis type="number" stroke="var(--text-muted)" />
+                  <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Confidence to Problem Count */}
+          <div className={styles.chartCard}>
+            <h3>Confidence to Problem Count</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={analytics.confidenceToProblemCount || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                  <XAxis dataKey="level" stroke="var(--text-muted)" />
+                  <YAxis stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="count" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Average time per difficulty */}
+          <div className={styles.chartCard}>
+            <h3>Avg Time per Difficulty</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={analytics.avgTimePerDiff || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                  <XAxis dataKey="name" stroke="var(--text-muted)" />
+                  <YAxis stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="avgMinutes" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Patterns Most Revised */}
+          <div className={styles.chartCard}>
+            <h3>Patterns Most Revised</h3>
+            <div className={styles.chartWrapper}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <BarChart data={(analytics.patternsMostRevised || []).slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
+                  <XAxis type="number" stroke="var(--text-muted)" />
+                  <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="count" fill="#14b8a6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
         </div>
 
-        <div className={styles.bottomGrid}>
-          <div className={styles.chartCard}>
-            <h3>Average Time per Difficulty</h3>
-            <div className={styles.chartWrapper}>
-              {avgTimePerDiff.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={avgTimePerDiff} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-                    <XAxis dataKey="name" stroke="var(--text-muted)" />
-                    <YAxis stroke="var(--text-muted)" label={{ value: 'Minutes', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)' }} />
-                    <Tooltip 
-                      cursor={{fill: 'var(--bg-main)'}}
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                    />
-                    <Bar dataKey="avgMinutes" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className={styles.emptyChart}>No time tracking data yet.</div>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.chartCard}>
-            <h3>Pattern Mastery</h3>
-            <div className={styles.chartWrapper}>
-              {patternMastery.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={patternMastery} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
-                    <XAxis type="number" domain={[0, 100]} stroke="var(--text-muted)" />
-                    <YAxis dataKey="name" type="category" width={100} stroke="var(--text-muted)" />
-                    <Tooltip 
-                      cursor={{fill: 'var(--bg-main)'}}
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                      formatter={(value) => [`${value}%`, 'Mastery Score']}
-                    />
-                    <Bar dataKey="score" fill="var(--success)" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className={styles.emptyChart}>Solve and tag problems with patterns to see mastery!</div>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
-            <h3>Due Revisions</h3>
-            <div className={styles.revisionList}>
-              {revisionList.length > 0 ? (
-                <ul className={styles.revList}>
-                  {revisionList.map(q => (
-                    <li key={q.id} className={styles.revItem}>
-                      <span className={styles.revId}>{q.id}</span>
-                      <span className={styles.revTitle}>{q.title}</span>
-                      <span className={`${styles.revDiff} ${styles[`diff${q.difficulty}`] || ''}`}>{q.difficulty}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className={styles.emptyChart}>Your revision queue is empty.</div>
-              )}
-            </div>
-          </div>
-        </div>
       </main>
     </div>
   );

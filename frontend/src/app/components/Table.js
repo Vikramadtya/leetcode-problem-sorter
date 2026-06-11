@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import styles from './Table.module.css';
 import { useAppStore } from '../../store/useAppStore';
@@ -197,20 +199,19 @@ function Table({
                       <div className={styles.checkboxRow}>
                         {/* Attempted checkbox */}
                         <button
-                          className={`${styles.checkboxBtn} ${isAttempted && !isSolved ? styles.checkedAttempted : ''}`}
+                          className={`${styles.checkboxBtn} ${isAttempted ? styles.checkedAttempted : ''}`}
                           onClick={() => {
-                            if (isAttempted && !isSolved) {
+                            if (isAttempted) {
                               updateProgress(q.id, { status: 'Unsolved' });
-                            } else if (!isAttempted) {
+                            } else {
                               updateProgress(q.id, { status: 'Attempted' });
                             }
                           }}
-                          title={isAttempted && !isSolved ? 'Unmark Attempted' : 'Mark Attempted'}
-                          aria-label={isAttempted && !isSolved ? 'Unmark Attempted' : 'Mark Attempted'}
-                          style={{ borderColor: isAttempted && !isSolved ? '#f59e0b' : 'var(--border-color)' }}
+                          title={isAttempted ? 'Unmark Attempted' : 'Mark Attempted'}
+                          aria-label={isAttempted ? 'Unmark Attempted' : 'Mark Attempted'}
                         >
-                          {isAttempted && !isSolved && (
-                            <span style={{ color: '#000', fontSize: '10px', fontWeight: 'bold' }}>A</span>
+                          {isAttempted && (
+                            <span className={styles.attemptedLabel}>A</span>
                           )}
                         </button>
 
@@ -260,7 +261,11 @@ function Table({
                     <div className={styles.reviseCell}>
                       {(isSolved || isAttempted) ? (
                         <button
-                          className={`${styles.checkboxBtn} ${isRevise ? styles.checked : ''} ${!isRevise && isRevisionOverdue ? styles.checkedOverdue : ''}`}
+                          className={`${styles.checkboxBtn}
+                            ${isRevise ? styles.checked : ''}
+                            ${!isRevise && isRevisionOverdue ? styles.checkedOverdue : ''}
+                            ${!isRevise && !isRevisionOverdue ? styles.revisionPending : ''}
+                          `}
                           onClick={() => {
                             if (isRevise) {
                               updateProgress(q.id, { revise: false });
@@ -271,7 +276,6 @@ function Table({
                           }}
                           title={isRevise ? 'Unmark for revision' : 'Mark for revision'}
                           aria-label={isRevise ? 'Unmark for revision' : 'Mark for revision'}
-                          style={!isRevise ? (isRevisionOverdue ? { borderColor: '#ef4444' } : { borderColor: 'var(--diff-med-text)' }) : {}}
                         >
                           {isRevise && (
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -280,7 +284,7 @@ function Table({
                           )}
                         </button>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }} aria-hidden="true">-</span>
+                        <span className={styles.emptyCell} aria-hidden="true">-</span>
                       )}
 
                       {/* SRS badge */}
@@ -331,7 +335,14 @@ function Table({
                         </svg>
                       </a>
                       {prog.solutionLink && (
-                        <a href={prog.solutionLink} target="_blank" rel="noreferrer" className={styles.link} title="My Solution" style={{ marginLeft: '0.25rem', color: '#10b981' }} aria-label={`View solution for ${q.title}`}>
+                        <a
+                          href={prog.solutionLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`${styles.link} ${styles.solutionLink}`}
+                          title="My Solution"
+                          aria-label={`View solution for ${q.title}`}
+                        >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
@@ -432,7 +443,7 @@ function Table({
                           onClick={() => updateProgress(q.id, { attempts: Math.max(0, attempts - 1) })}
                           aria-label="Decrease attempt count"
                         >-</button>
-                        <span style={{ minWidth: '20px', display: 'inline-block', textAlign: 'center' }}>{attempts}</span>
+                        <span className={styles.attemptCount}>{attempts}</span>
                         <button
                           className={styles.attemptBtn}
                           onClick={() => updateProgress(q.id, { attempts: attempts + 1 })}

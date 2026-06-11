@@ -7,7 +7,7 @@
   "app": {
     "name": "Tacker",
     "description": "Track your LeetCode interview preparation questions.",
-    "defaultTheme": "dark"
+    "defaultTheme": "light"
   },
   
   "api": {

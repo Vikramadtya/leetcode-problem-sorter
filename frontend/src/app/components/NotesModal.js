@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { useAppStore } from '../../store/useAppStore';
-import styles from '../page.module.css';
-
 /**
- * NotesModal — shared by Tracker and Explore pages.
- * 
+ * NotesModal — Markdown-enabled notes editor for a single question.
+ *
  * Props:
  *   question  QuestionWithProgress
  *   onClose   () => void
- *   onSave    (questionId, notes: string) => void
+ *   onSave    (questionId: string, notes: string) => void
+ *
+ * Uses its own CSS module (NotesModal.module.css) — does NOT depend on page.module.css.
  */
+import { useState, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import styles from './NotesModal.module.css';
+
 export default function NotesModal({ question, onClose, onSave }) {
   const [notesDraft, setNotesDraft] = useState(question?.progress?.notes || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -27,50 +28,66 @@ export default function NotesModal({ question, onClose, onSave }) {
   if (!question) return null;
 
   return (
-    <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label={`Notes for ${question.title}`}>
-      <div className={styles.modalContent} style={{ maxWidth: '800px', minHeight: '400px' }}>
-        <div className={styles.modalHeader}>
-          <h3>Notes & Approach: {question.title}</h3>
-          <div className={styles.modalTabs}>
+    <div
+      className={styles.overlay}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Notes for ${question.title}`}
+    >
+      <div className={styles.modal}>
+        {/* ── Header: title + Edit/Preview tabs ── */}
+        <div className={styles.header}>
+          <h3>Notes &amp; Approach: {question.title}</h3>
+          <div className={styles.tabs} role="tablist">
             <button
+              role="tab"
+              aria-selected={!isEditing}
               className={`${styles.tabBtn} ${!isEditing ? styles.tabActive : ''}`}
               onClick={() => setIsEditing(false)}
-              aria-pressed={!isEditing}
-            >Preview</button>
+            >
+              Preview
+            </button>
             <button
+              role="tab"
+              aria-selected={isEditing}
               className={`${styles.tabBtn} ${isEditing ? styles.tabActive : ''}`}
               onClick={() => setIsEditing(true)}
-              aria-pressed={isEditing}
-            >Edit</button>
+            >
+              Edit
+            </button>
           </div>
         </div>
 
-        <div className={styles.modalBody}>
+        {/* ── Body: editor or markdown preview ── */}
+        <div className={styles.body}>
           {isEditing ? (
             <textarea
-              className={styles.modalTextarea}
+              className={styles.textarea}
               rows={15}
-              placeholder="Write your approach, time complexity, or paste your solution using Markdown..."
+              placeholder="Write your approach, time complexity, or paste your solution using Markdown…"
               value={notesDraft}
-              onChange={e => setNotesDraft(e.target.value)}
+              onChange={(e) => setNotesDraft(e.target.value)}
               autoFocus
               aria-label="Notes editor"
             />
           ) : (
-            <div className={styles.markdownPreview}>
+            <div className={styles.preview}>
               {notesDraft ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{notesDraft}</ReactMarkdown>
               ) : (
-                <p className={styles.emptyState}>No notes yet. Click Edit to add some.</p>
+                <p className={styles.emptyPreview}>No notes yet. Click Edit to add some.</p>
               )}
             </div>
           )}
         </div>
 
-        <div className={styles.modalActions}>
-          <button type="button" onClick={onClose} className={styles.modalCancelBtn}>Close</button>
+        {/* ── Footer actions ── */}
+        <div className={styles.actions}>
+          <button type="button" onClick={onClose} className={styles.cancelBtn}>
+            Close
+          </button>
           {isEditing && (
-            <button type="button" onClick={handleSave} className={styles.modalSubmitBtn}>
+            <button type="button" onClick={handleSave} className={styles.saveBtn}>
               Save Notes
             </button>
           )}

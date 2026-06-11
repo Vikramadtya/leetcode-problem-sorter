@@ -590,11 +590,89 @@ components:
       allOf:
         - $ref: '#/components/schemas/StatsResponse'
         - type: object
-          required: [topCompanies, platformsBreakdown, avgTimePerDiff, patternMasteryData, revisionList]
+          required: [
+            topCompanies, platformsBreakdown, avgTimePerDiff, patternMasteryData, revisionList,
+            totalFavourite, problemStatusOverview, confidenceVsDifficulty, patternUsageFrequency,
+            tagsFrequency, problemsByPattern, problemsByTag, problemsSolvedOverTime,
+            timePerDiffOverTime, patternsMostRevised, confidenceToProblemCount
+          ]
           description: >
             Full analytics payload — superset of StatsResponse.
             Only fetched by the Dashboard page. Contains chart data.
           properties:
+            totalFavourite:
+              type: integer
+              minimum: 0
+            problemStatusOverview:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            confidenceVsDifficulty:
+              type: array
+              items:
+                type: object
+                properties:
+                  difficulty:
+                    type: string
+                  level1:
+                    type: integer
+                  level2:
+                    type: integer
+                  level3:
+                    type: integer
+                  level4:
+                    type: integer
+            patternUsageFrequency:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            tagsFrequency:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            problemsByPattern:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            problemsByTag:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            problemsSolvedOverTime:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                  count:
+                    type: integer
+            timePerDiffOverTime:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                  Easy:
+                    type: integer
+                  Medium:
+                    type: integer
+                  Hard:
+                    type: integer
+            patternsMostRevised:
+              type: array
+              items:
+                $ref: '#/components/schemas/NameCountPair'
+            confidenceToProblemCount:
+              type: array
+              items:
+                type: object
+                properties:
+                  level:
+                    type: integer
+                  count:
+                    type: integer
             topCompanies:
               type: array
               description: Top 15 companies by number of solved questions.
@@ -738,9 +816,16 @@ paths:
             default: all
         - name: company
           in: query
-          description: Company slug (lowercase) or "all".
+          description: Company filter
           schema:
             type: string
+        - name: timePeriod
+          in: query
+          description: Time period filter (only applies if company is specified). Valid values are 'all', 'thirty-days', 'three-months', 'six-months', 'more-than-six-months'
+          schema:
+            type: string
+            enum: [all, thirty-days, three-months, six-months, more-than-six-months]
+            default: all
             maxLength: 128
           allowReserved: true
         - name: tag

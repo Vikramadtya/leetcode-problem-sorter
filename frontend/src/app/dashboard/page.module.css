@@ -231,6 +231,12 @@
   border-radius: 9999px;
 }
 
-.diffEasy { background-color: var(--diff-easy-bg); color: var(--diff-easy-text); }
-.diffMedium { background-color: var(--diff-med-bg); color: var(--diff-med-text); }
-.diffHard { background-color: var(--diff-hard-bg); color: var(--diff-hard-text); }
+.diffEasy   { background-color: var(--diff-easy-bg); color: var(--diff-easy-text); }
+.diffMedium { background-color: var(--diff-med-bg);  color: var(--diff-med-text); }
+.diffHard   { background-color: var(--diff-hard-bg); color: var(--diff-hard-text); }
+
+/* Full-width card that spans all columns in the bottom grid */
+.chartCardFull {
+  grid-column: 1 / -1;
+}
+

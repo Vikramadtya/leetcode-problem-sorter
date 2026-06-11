@@ -29,29 +29,44 @@ try {
       .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('.'))
       .map(dirent => dirent.name);
 
+    const timePeriods = ['all', 'thirty-days', 'three-months', 'six-months', 'more-than-six-months'];
+
     for (const company of companies) {
-      const allCsvPath = path.join(questionsPath, company, 'all.csv');
-      if (fs.existsSync(allCsvPath)) {
-        const fileContent = fs.readFileSync(allCsvPath, 'utf-8');
-        const records = parse(fileContent, { columns: true, skip_empty_lines: true });
+      for (const timePeriod of timePeriods) {
+        const csvPath = path.join(questionsPath, company, `${timePeriod}.csv`);
+        if (fs.existsSync(csvPath)) {
+          const fileContent = fs.readFileSync(csvPath, 'utf-8');
+          const records = parse(fileContent, { columns: true, skip_empty_lines: true });
 
-        for (const record of records) {
-          const id = record['ID']?.trim();
-          if (!id) continue;
+          for (const record of records) {
+            const id = record['ID']?.trim();
+            if (!id) continue;
 
-          if (!globalQuestions[id]) {
-            globalQuestions[id] = {
-              'ID': id,
-              'Title': record['Title'] || record[' Title'] || '',
-              'Difficulty': record['Difficulty'] || record[' Difficulty'] || 'Unknown',
-              'Acceptance %': record['Acceptance %'] || record[' Acceptance %'] || '',
-              'Frequency %': record['Frequency %'] || record[' Frequency %'] || '',
-              'Leetcode Question Link': record['Leetcode Question Link'] || record[' Leetcode Question Link'] || '',
-              companies: []
-            };
-          }
-          if (!globalQuestions[id].companies.includes(company)) {
-            globalQuestions[id].companies.push(company);
+            const freqStr = record['Frequency %'] || record[' Frequency %'] || '0';
+            const freq = parseFloat(freqStr) || 0;
+
+            if (!globalQuestions[id]) {
+              globalQuestions[id] = {
+                'ID': id,
+                'Title': record['Title'] || record[' Title'] || '',
+                'Difficulty': record['Difficulty'] || record[' Difficulty'] || 'Unknown',
+                'Acceptance %': record['Acceptance %'] || record[' Acceptance %'] || '',
+                'globalFrequency': freq,
+                'Leetcode Question Link': record['Leetcode Question Link'] || record[' Leetcode Question Link'] || '',
+                companies: {}
+              };
+            } else {
+              // Track highest global frequency
+              if (timePeriod === 'all' && freq > globalQuestions[id].globalFrequency) {
+                globalQuestions[id].globalFrequency = freq;
+              }
+            }
+
+            if (!globalQuestions[id].companies[company]) {
+              globalQuestions[id].companies[company] = {};
+            }
+            
+            globalQuestions[id].companies[company][timePeriod] = freq;
           }
         }
       }
@@ -59,6 +74,13 @@ try {
 
     const outputPath = path.join(__dirname, '..', '.data', 'global_questions.json');
     fs.writeFileSync(outputPath, JSON.stringify(globalQuestions, null, 2));
+    
+    // Also write to mock-server for the backend to use
+    const mockServerOutputPath = path.join(__dirname, '..', '..', 'mock-server', 'data', 'global_questions.json');
+    if (fs.existsSync(path.dirname(mockServerOutputPath))) {
+      fs.writeFileSync(mockServerOutputPath, JSON.stringify(globalQuestions, null, 2));
+    }
+    
     console.log('Successfully generated global_questions.json');
   }
 } catch (error) {

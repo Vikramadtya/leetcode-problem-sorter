@@ -1,4 +1,5 @@
-import React from 'react';
+'use client';
+
 import dayjs from 'dayjs';
 import styles from './Heatmap.module.css';
 
@@ -81,10 +82,10 @@ export default function Heatmap({ data }) {
       </div>
       <div className={styles.legend}>
         <span className={styles.legendText}>Less</span>
-        <div className={styles.cell} style={{ backgroundColor: getColor(0) }}></div>
-        <div className={styles.cell} style={{ backgroundColor: getColor(1) }}></div>
-        <div className={styles.cell} style={{ backgroundColor: getColor(2) }}></div>
-        <div className={styles.cell} style={{ backgroundColor: getColor(4) }}></div>
+        <div className={`${styles.cell} ${styles.cellL0}`} aria-hidden="true" />
+        <div className={`${styles.cell} ${styles.cellL1}`} aria-hidden="true" />
+        <div className={`${styles.cell} ${styles.cellL2}`} aria-hidden="true" />
+        <div className={`${styles.cell} ${styles.cellL3}`} aria-hidden="true" />
         <span className={styles.legendText}>More</span>
       </div>
     </div>

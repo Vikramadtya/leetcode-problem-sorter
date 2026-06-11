@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import styles from './ReflectionModal.module.css'; // Reuse styles
 
@@ -29,13 +31,12 @@ export default function InitialSolveModal({ question, patterns = [], onClose, on
         <div className={styles.modalBody}>
           <div className={styles.fieldGroup}>
             <label>Solution Link (Optional)</label>
-            <input 
+            <input
               type="url"
               className={styles.input}
               placeholder="e.g., https://leetcode.com/problems/..."
               value={solutionLink}
               onChange={e => setSolutionLink(e.target.value)}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-main)', outline: 'none', transition: 'border-color 0.2s' }}
             />
           </div>
 

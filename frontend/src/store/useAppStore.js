@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { apiClient } from '../lib/api/apiClient';
 
+// ─── Logging ──────────────────────────────────────────────────────────────
+const log = {
+  info: (...args) => console.info('[Store]', ...args),
+  warn: (...args) => console.warn('[Store]', ...args),
+  error: (...args) => console.error('[Store]', ...args),
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const DEBOUNCE_MS = 300;
@@ -10,6 +17,7 @@ const defaultFilters = () => ({
   search: '',
   difficulty: 'all',
   company: 'all',
+  timePeriod: 'all',
   status: 'all',
   tag: '',
   pattern: 'all',
@@ -111,7 +119,7 @@ export const useAppStore = create((set, get) => {
           isLoading: false,
         });
       } catch (error) {
-        console.error('[Store] fetchQuestions failed:', error);
+        log.error('fetchQuestions failed:', error);
         set({ error: error.message, isLoading: false });
       }
     },
@@ -128,7 +136,7 @@ export const useAppStore = create((set, get) => {
           companies: comps || [],
         });
       } catch (error) {
-        console.error('[Store] fetchUtilities failed:', error);
+        log.error('fetchUtilities failed:', error);
       }
     },
 
@@ -155,33 +163,80 @@ export const useAppStore = create((set, get) => {
           },
         });
       } catch (error) {
-        console.error('[Store] fetchLightStats failed:', error);
+        log.error('fetchLightStats failed:', error);
       }
     },
 
     /**
-     * Full analytics for Dashboard page only.
-     * @deprecated Use fetchLightStats() for Tracker/Explore pages.
+     * fetchStats — Full analytics for Dashboard page only.
+     *
+     * Saves normalised summary fields AND the complete raw server response
+     * as `stats._raw` so Dashboard can access topCompanies, patternMasteryData,
+     * revisionList, avgTimePerDiff, platformsBreakdown etc.
+     *
+     * Do NOT call from Tracker / Explore pages — use fetchLightStats() instead.
      */
     fetchStats: async () => {
       try {
         const data = await apiClient.getAnalytics();
         set({
           stats: {
-            solved: data.totalSolved || 0,
+            // Normalised summary fields (same shape as fetchLightStats)
+            solved:    data.totalSolved    || 0,
             attempted: data.totalAttempted || 0,
-            dueRevision: data.totalRevise || 0,
-            easy: data.difficultyBreakdown?.Easy || 0,
+            dueRevision: data.totalRevise  || 0,
+            easy:   data.difficultyBreakdown?.Easy   || 0,
             medium: data.difficultyBreakdown?.Medium || 0,
-            hard: data.difficultyBreakdown?.Hard || 0,
+            hard:   data.difficultyBreakdown?.Hard   || 0,
             currentStreak: data.currentStreak || 0,
-            maxStreak: data.maxStreak || 0,
-            weeklyCount: data.weeklyCount || 0,
+            maxStreak:     data.maxStreak     || 0,
+            weeklyCount:   data.weeklyCount   || 0,
             activityTimeline: data.activityTimeline || null,
+            // Full raw payload — Dashboard reads chart data from here
+            _raw: data,
           },
         });
       } catch (error) {
-        console.error('[Store] fetchStats failed:', error);
+        log.error('fetchStats failed:', error);
+      }
+    },
+
+
+    // ── Flashcard mode ──────────────────────────────────────────────────
+
+    /**
+     * openFlashcards — Fetches questions due for revision and returns them.
+     * Called by the Tracker page before opening FlashcardMode.
+     */
+    openFlashcards: async () => {
+      try {
+        const data = await apiClient.getQuestions({
+          reviseFilter: true,
+          trackerMode: true,
+          limit: 1000,
+        });
+        log.info('openFlashcards: loaded', data?.data?.length ?? 0, 'questions');
+        return data?.data || [];
+      } catch (error) {
+        log.error('openFlashcards failed:', error);
+        return [];
+      }
+    },
+
+    /**
+     * bulkUpdateProgress — Batch update used by FlashcardMode at end of session.
+     * Applies same SRS logic as PATCH /progress/:id but in one network round-trip.
+     */
+    bulkUpdateProgress: async (updates = []) => {
+      if (!updates.length) return;
+      try {
+        await apiClient.bulkUpdateProgress(updates);
+        log.info('bulkUpdateProgress: committed', updates.length, 'updates');
+        // Refresh stats after bulk commit
+        get().fetchLightStats();
+      } catch (error) {
+        log.error('bulkUpdateProgress failed:', error);
+        throw error;
       }
     },
 
@@ -232,8 +287,8 @@ export const useAppStore = create((set, get) => {
         }
 
       } catch (error) {
-        console.error('[Store] updateProgress failed:', error);
-        // Roll back optimistic update
+        log.error('updateProgress failed:', error);
+        // Roll back the optimistic update to prevent stale UI state
         set({ questions: previousQuestions });
       }
     },

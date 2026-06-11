@@ -1,24 +1,21 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const OpenApiValidator = require('express-openapi-validator');
+const db = require('./db'); // SQLite db
 
 const PORT = process.env.PORT || 4000;
 const app = express();
 
-// ─── Security / Request Hygiene ──────────────────────────────────────────
 app.use(cors({ origin: ['http://localhost:3000', 'http://127.0.0.1:3000'] }));
-app.use(express.json({ limit: '1mb' })); // MS-4.6: limit payload size
+app.use(express.json({ limit: '1mb' }));
 
-// MS-3.1: Attach requestId to every request
 app.use((req, _res, next) => {
   req.requestId = randomUUID();
   next();
 });
 
-// MS-3.2: Structured request logger
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -29,7 +26,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// MS-3.3: Attach X-Request-ID to every response
 app.use((req, res, next) => {
   res.setHeader('X-Request-ID', req.requestId);
   next();
@@ -43,71 +39,7 @@ app.use(
   })
 );
 
-// ============================================================
-// DATA PATHS
-// ============================================================
-const GLOBAL_DATA_PATH = path.join(__dirname, 'data', 'global_questions.json');
-const PROGRESS_DATA_PATH = path.join(__dirname, 'data', 'user_progress.json');
-
-// ============================================================
-// IN-MEMORY INDEXES  (built once at startup, O(1) lookups)
-// ============================================================
-// Main question store — Map<id, Question>
-let questionMap = new Map();
-// Sorted question list (by numeric id) for stable ordering
-let questionList = [];
-// Company → Set of question IDs
-let companyIndex = new Map();
-// Difficulty (lowercase) → Set of question IDs
-let difficultyIndex = new Map(['easy', 'medium', 'hard'].map(d => [d, new Set()]));
-// User progress — Map<questionId, ProgressRecord>
-let progressMap = new Map();
-
-// ============================================================
-// ANALYTICS CACHE  (invalidated on every PATCH)
-// ============================================================
-let analyticsCache = null; // null = dirty / needs recompute
-
-// ============================================================
-// METADATA (patterns, platforms, tags)
-// ============================================================
-let patternsData = [
-  { id: 'pat-1',  name: 'Two Pointers',       description: 'Two pointers iterating through data structures.' },
-  { id: 'pat-2',  name: 'Sliding Window',      description: 'Contiguous subarray/substring optimisation.' },
-  { id: 'pat-3',  name: 'Dynamic Programming', description: 'Memoisation and optimal substructure.' },
-  { id: 'pat-4',  name: 'BFS / DFS',           description: 'Graph and tree traversal.' },
-  { id: 'pat-5',  name: 'Binary Search',       description: 'Search in a sorted/monotonic space.' },
-  { id: 'pat-6',  name: 'Backtracking',        description: 'Explore all possibilities and prune.' },
-  { id: 'pat-7',  name: 'Heap / Priority Queue', description: 'Efficient min/max retrieval.' },
-  { id: 'pat-8',  name: 'Greedy',              description: 'Locally optimal choices.' },
-  { id: 'pat-9',  name: 'Union Find',          description: 'Disjoint set / connected components.' },
-  { id: 'pat-10', name: 'Trie',                description: 'Prefix tree for string problems.' },
-  { id: 'pat-11', name: 'Monotonic Stack',     description: 'Next greater/smaller element problems.' },
-  { id: 'pat-12', name: 'Fast & Slow Pointers', description: 'Cycle detection in linked lists.' },
-];
-
-let platformsData = [
-  { id: 'plat-1', name: 'LeetCode',   description: 'Popular competitive programming platform.' },
-  { id: 'plat-2', name: 'HackerRank', description: 'Common for online assessments.' },
-  { id: 'plat-3', name: 'Codeforces', description: 'Competitive programming contests.' },
-];
-
-let tagsData = [
-  { id: 'tag-1', name: 'Array',       description: '' },
-  { id: 'tag-2', name: 'String',      description: '' },
-  { id: 'tag-3', name: 'Graph',       description: '' },
-  { id: 'tag-4', name: 'Tree',        description: '' },
-  { id: 'tag-5', name: 'Math',        description: '' },
-  { id: 'tag-6', name: 'Hash Map',    description: '' },
-  { id: 'tag-7', name: 'Recursion',   description: '' },
-  { id: 'tag-8', name: 'Bit Masking', description: '' },
-];
-
-// ============================================================
-// SRS INTERVALS  (Spaced Repetition)
-// ============================================================
 const SRS_INTERVALS = { 1: 1, 2: 3, 3: 7, 4: 14 };
-
 function calcNextRevisionDate(confidenceLevel) {
   const days = SRS_INTERVALS[Math.max(1, Math.min(4, confidenceLevel || 3))];
   const d = new Date();
@@ -115,349 +47,204 @@ function calcNextRevisionDate(confidenceLevel) {
   return d.toISOString();
 }
 
-// ============================================================
-// DATA LOADING & INDEX BUILDING
-// ============================================================
-function loadGlobalQuestions() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(GLOBAL_DATA_PATH, 'utf8'));
-    questionMap.clear();
-    companyIndex.clear();
-    ['easy', 'medium', 'hard'].forEach(d => difficultyIndex.set(d, new Set()));
-
-    Object.values(raw).forEach(q => {
-      const id = String(q.ID || q.id);
-      const difficulty = (q.Difficulty || q.difficulty || 'Medium');
-      const diffLower = difficulty.toLowerCase();
-      const freqRaw = q['Frequency %'] || q.frequency || '0';
-      const frequency = parseFloat(freqRaw) || 0;
-      const companies = (q.companies || []).map(c => String(c).toLowerCase().trim()).filter(Boolean);
-
-      const question = {
-        id,
-        title: q.Title || q.title || '',
-        titleLower: (q.Title || q.title || '').toLowerCase(),
-        url: q['Leetcode Question Link'] || q.URL || q.url || '',
-        difficulty,
-        diffLower,
-        acceptanceRate: q['Acceptance %'] || q.acceptanceRate || '-',
-        frequency,
-        companies,      // array of lowercase slugs
-        isCustom: false,
-      };
-
-      questionMap.set(id, question);
-
-      // Difficulty index
-      if (difficultyIndex.has(diffLower)) {
-        difficultyIndex.get(diffLower).add(id);
-      }
-
-      // Company index
-      companies.forEach(c => {
-        if (!companyIndex.has(c)) companyIndex.set(c, new Set());
-        companyIndex.get(c).add(id);
-      });
-    });
-
-    // Build sorted list (numeric id ascending, custom at end)
-    questionList = Array.from(questionMap.values()).sort((a, b) => {
-      const na = parseInt(a.id), nb = parseInt(b.id);
-      if (!isNaN(na) && !isNaN(nb)) return na - nb;
-      return a.id.localeCompare(b.id);
-    });
-
-    console.log(`✓ Loaded ${questionMap.size} questions | ${companyIndex.size} companies indexed`);
-  } catch (err) {
-    console.error('✗ Failed to load global questions:', err.message);
-  }
+function normalizeTags(incoming, existing = []) {
+  if (incoming === undefined) return Array.isArray(existing) ? existing : [];
+  if (Array.isArray(incoming)) return incoming.map(t => t.trim()).filter(Boolean);
+  if (typeof incoming === 'string') return incoming.split(',').map(t => t.trim()).filter(Boolean);
+  return Array.isArray(existing) ? existing : [];
 }
 
-function loadProgress() {
-  try {
-    if (fs.existsSync(PROGRESS_DATA_PATH)) {
-      const raw = JSON.parse(fs.readFileSync(PROGRESS_DATA_PATH, 'utf8'));
-      progressMap.clear();
-      Object.entries(raw).forEach(([id, p]) => {
-        // Normalise legacy comma-string tags → array
-        if (typeof p.tags === 'string') {
-          p.tags = p.tags ? p.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-        }
-        if (!Array.isArray(p.tags)) p.tags = [];
-        progressMap.set(id, p);
-      });
-      console.log(`✓ Loaded progress for ${progressMap.size} questions`);
+function parseJSON(str) {
+  try { return JSON.parse(str); } catch { return []; }
+}
+
+function formatQuestion(row) {
+  const companies = parseJSON(row.companies);
+  const tags = parseJSON(row.tags);
+  return {
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    difficulty: row.difficulty,
+    acceptanceRate: row.acceptanceRate,
+    frequency: row.frequency,
+    companies: companies,
+    isCustom: !!row.isCustom,
+    progress: {
+      status: row.status || 'Unsolved',
+      dateSolved: row.dateSolved || null,
+      confidenceLevel: row.confidenceLevel || null,
+      nextRevisionDate: row.nextRevisionDate || null,
+      revise: !!row.revise,
+      attempts: row.attempts || 0,
+      timeSpent: row.timeSpent || 0,
+      notes: row.notes || '',
+      tags: tags,
+      pattern: row.pattern || '',
+      solutionLink: row.solutionLink || '',
+      important: !!row.important,
     }
-  } catch (err) {
-    console.error('✗ Failed to load progress:', err.message);
-  }
-}
-
-// MS-1.1 + MS-1.2 + MS-5.3: Async debounced write with atomic rename
-let _saveTimer = null;
-function saveProgress() {
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => {
-    const obj = Object.fromEntries(progressMap);
-    const tmp = PROGRESS_DATA_PATH + '.tmp';
-    fs.writeFile(tmp, JSON.stringify(obj, null, 2), 'utf8', (err) => {
-      if (err) { console.error('✗ Failed to write progress tmp:', err.message); return; }
-      fs.rename(tmp, PROGRESS_DATA_PATH, (err2) => {
-        if (err2) console.error('✗ Failed to rename progress file:', err2.message);
-      });
-    });
-  }, 500); // batch writes within 500ms window
-}
-
-function invalidateAnalyticsCache() {
-  analyticsCache = null;
-}
-
-// Helper: get progress or default
-function getProgress(id) {
-  return progressMap.get(id) || { status: 'Unsolved', attempts: 0, tags: [] };
-}
-
-// Helper: format question for API response
-function formatQuestion(q, progress) {
-  return {
-    id: q.id,
-    title: q.title,
-    url: q.url,
-    difficulty: q.difficulty,
-    acceptanceRate: q.acceptanceRate,
-    frequency: q.frequency,
-    companies: q.companies,
-    isCustom: q.isCustom,
-    progress: formatProgress(progress),
   };
 }
-
-function formatProgress(p) {
-  return {
-    status: p.status || 'Unsolved',
-    dateSolved: p.dateSolved || null,
-    confidenceLevel: p.confidenceLevel || null,
-    nextRevisionDate: p.nextRevisionDate || null,
-    revise: p.revise || false,
-    attempts: p.attempts || 0,
-    timeSpent: p.timeSpent || 0,
-    notes: p.notes || '',
-    tags: Array.isArray(p.tags) ? p.tags : [],
-    pattern: p.pattern || '',
-    solutionLink: p.solutionLink || '',
-    important: p.important || false,
-  };
-}
-
-
 
 // ============================================================
-// GET /api/v1/questions  —  O(n) with index assists
+// GET /api/v1/questions
 // ============================================================
 app.get('/api/v1/questions', (req, res) => {
   const p = req.query;
+  const conditions = [];
+  const params = [];
 
-  // --- Start from full list or pre-filtered by company/difficulty ---
-  let candidateIds = null; // null = all
+  let companyField = 'q.frequency';
+  let joinCompanyFreq = '';
 
   if (p.company && p.company !== 'all') {
-    const slug = p.company.toLowerCase().trim();
-    if (slug === 'custom questions') {
-      candidateIds = new Set(
-        questionList.filter(q => q.isCustom).map(q => q.id)
-      );
+    if (p.company.toLowerCase() === 'custom questions') {
+      conditions.push(`q.isCustom = 1`);
     } else {
-      candidateIds = companyIndex.get(slug) || new Set();
+      const timePeriod = (p.timePeriod && p.timePeriod !== 'all') ? p.timePeriod : 'all';
+      
+      joinCompanyFreq = `
+        INNER JOIN question_company_frequencies qcf 
+        ON q.id = qcf.question_id 
+        AND qcf.company_slug = ? 
+        AND qcf.time_period = ?
+      `;
+      params.push(p.company.toLowerCase(), timePeriod);
+      
+      companyField = 'qcf.frequency';
     }
   }
+
+  let selectQuery = `
+    SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important,
+    ${companyField} as frequency,
+    (SELECT json_group_array(DISTINCT company_slug) FROM question_company_frequencies WHERE question_id = q.id) as companies,
+    (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags
+    FROM questions q
+    LEFT JOIN progress p ON q.id = p.id
+    ${joinCompanyFreq}
+  `;
 
   if (p.difficulty && p.difficulty !== 'all') {
-    const diffSlug = p.difficulty.toLowerCase();
-    const diffIds = difficultyIndex.get(diffSlug) || new Set();
-    candidateIds = candidateIds
-      ? new Set([...candidateIds].filter(id => diffIds.has(id)))
-      : diffIds;
+    conditions.push(`q.diffLower = ?`);
+    params.push(p.difficulty.toLowerCase());
   }
 
-  // Walk questions
-  const source = candidateIds
-    ? Array.from(candidateIds).map(id => questionMap.get(id)).filter(Boolean)
-    : questionList;
-
-  const now = new Date();
-  const results = [];
-
-  for (const q of source) {
-    const prog = getProgress(q.id);
-    const status = prog.status || 'Unsolved';
-    const isSolved = status === 'Solved';
-    const isAttempted = status === 'Attempted';
-    const hasEngaged = isSolved || isAttempted || prog.important || prog.revise || (prog.attempts > 0);
-
-    // trackerMode: only engaged questions
-    if (p.trackerMode === 'true' && !q.isCustom && !hasEngaged) continue;
-
-    // text search — already O(n) so keep simple
-    if (p.search) {
-      const s = p.search.toLowerCase();
-      if (!q.titleLower.includes(s) && !q.id.includes(s)) continue;
-    }
-
-    // status filter
-    if (p.status && p.status !== 'all' && status !== p.status) continue;
-
-    // tag filter
-    if (p.tag) {
-      const tagLower = p.tag.toLowerCase();
-      const tags = Array.isArray(prog.tags) ? prog.tags : [];
-      if (!tags.some(t => t.toLowerCase().includes(tagLower))) continue;
-    }
-
-    // pattern filter
-    if (p.pattern && p.pattern !== 'all') {
-      const ptn = (prog.pattern || '').toLowerCase();
-      if (ptn !== p.pattern.toLowerCase()) continue;
-    }
-
-    // hideSolved
-    if (p.hideSolved === 'true' && isSolved) continue;
-
-    // starredOnly
-    if (p.starredOnly === 'true' && !prog.important) continue;
-
-    // reviseFilter
-    if (p.reviseFilter === 'true') {
-      const isDue = prog.nextRevisionDate && new Date(prog.nextRevisionDate) <= now;
-      if (!prog.revise && !isDue) continue;
-    }
-
-    results.push(formatQuestion(q, prog));
+  if (p.trackerMode === 'true') {
+    conditions.push(`(p.status IN ('Solved', 'Attempted') OR p.important = 1 OR p.revise = 1 OR p.attempts > 0 OR q.isCustom = 1)`);
   }
 
-  // --- Sorting ---
+  if (p.search) {
+    const s = `%${p.search.toLowerCase()}%`;
+    conditions.push(`(q.titleLower LIKE ? OR q.id LIKE ?)`);
+    params.push(s, s);
+  }
+
+  if (p.status && p.status !== 'all') {
+    if (p.status === 'Unsolved') {
+      conditions.push(`(p.status IS NULL OR p.status = 'Unsolved')`);
+    } else {
+      conditions.push(`p.status = ?`);
+      params.push(p.status);
+    }
+  }
+
+  if (p.tag) {
+    conditions.push(`p.id IN (SELECT progress_id FROM progress_tags WHERE lower(tag) LIKE ?)`);
+    params.push(`%${p.tag.toLowerCase()}%`);
+  }
+
+  if (p.pattern && p.pattern !== 'all') {
+    conditions.push(`lower(p.pattern) = ?`);
+    params.push(p.pattern.toLowerCase());
+  }
+
+  if (p.hideSolved === 'true') {
+    conditions.push(`(p.status IS NULL OR p.status != 'Solved')`);
+  }
+
+  if (p.starredOnly === 'true') {
+    conditions.push(`p.important = 1`);
+  }
+
+  if (p.reviseFilter === 'true') {
+    conditions.push(`(p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND p.nextRevisionDate <= datetime('now')) )`);
+  }
+
+  let whereClause = conditions.length > 0 ? `WHERE ` + conditions.join(' AND ') : '';
+  
+  let orderBy = `ORDER BY CAST(q.id AS INTEGER) ASC`; // default
   if (p.sortBy) {
-    const dir = p.sortDirection === 'desc' ? -1 : 1;
-    const PROGRESS_FIELDS = new Set(['status', 'attempts', 'confidenceLevel', 'timeSpent', 'dateSolved', 'revise', 'important', 'nextRevisionDate']);
-    const DIFF_ORDER = { easy: 1, medium: 2, hard: 3 };
-
-    results.sort((a, b) => {
-      let va = PROGRESS_FIELDS.has(p.sortBy) ? a.progress[p.sortBy] : a[p.sortBy];
-      let vb = PROGRESS_FIELDS.has(p.sortBy) ? b.progress[p.sortBy] : b[p.sortBy];
-
-      if (p.sortBy === 'difficulty') {
-        va = DIFF_ORDER[(va || '').toLowerCase()] || 0;
-        vb = DIFF_ORDER[(vb || '').toLowerCase()] || 0;
-      } else if (p.sortBy === 'id') {
-        va = parseInt(va) || 0;
-        vb = parseInt(vb) || 0;
-      }
-
-      if (va == null || va === '') return 1 * dir;
-      if (vb == null || vb === '') return -1 * dir;
-      if (va < vb) return -1 * dir;
-      if (va > vb) return 1 * dir;
-      return 0;
-    });
+    const dir = p.sortDirection === 'desc' ? 'DESC' : 'ASC';
+    if (p.sortBy === 'difficulty') orderBy = `ORDER BY CASE q.diffLower WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END ${dir}`;
+    else if (p.sortBy === 'id') orderBy = `ORDER BY CAST(q.id AS INTEGER) ${dir}`;
+    else if (p.sortBy === 'title') orderBy = `ORDER BY q.titleLower ${dir}`;
+    else if (p.sortBy === 'acceptanceRate') orderBy = `ORDER BY q.acceptanceRate ${dir}`;
+    else if (p.sortBy === 'frequency') orderBy = `ORDER BY frequency ${dir}`;
+    else if (p.sortBy === 'status') orderBy = `ORDER BY p.status ${dir}`;
+    else if (p.sortBy === 'attempts') orderBy = `ORDER BY p.attempts ${dir}`;
+    else if (p.sortBy === 'timeSpent') orderBy = `ORDER BY p.timeSpent ${dir}`;
+    else if (p.sortBy === 'dateSolved') orderBy = `ORDER BY p.dateSolved ${dir}`;
+    else orderBy = `ORDER BY p.${p.sortBy} ${dir}`;
   }
 
-  // --- Pagination ---
+  // Execute Count
+  const countQuery = `SELECT COUNT(*) as totalCount FROM questions q LEFT JOIN progress p ON q.id = p.id ${joinCompanyFreq} ${whereClause}`;
+  const totalCount = db.prepare(countQuery).get(...params).totalCount;
+
+  // Pagination
   const page = Math.max(1, parseInt(p.page) || 1);
   const limit = Math.min(5000, parseInt(p.limit) || 50);
-  const totalCount = results.length;
   const totalPages = Math.ceil(totalCount / limit) || 1;
-  const paginated = results.slice((page - 1) * limit, page * limit);
+  const offset = (page - 1) * limit;
 
-  res.json({ data: paginated, totalCount, page, totalPages });
+  selectQuery += ` ${whereClause} ${orderBy} LIMIT ${limit} OFFSET ${offset}`;
+  
+  const rows = db.prepare(selectQuery).all(...params);
+  const data = rows.map(formatQuestion);
+
+  res.json({ data, totalCount, page, totalPages });
 });
 
 // ============================================================
-// GET /api/v1/progress/:id   — single question progress
+// GET /api/v1/progress/:id
 // ============================================================
 app.get('/api/v1/progress/:id', (req, res) => {
-  const prog = getProgress(req.params.id);
-  res.json(formatProgress(prog));
+  const row = db.prepare(`
+    SELECT p.*, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags
+    FROM progress p WHERE id = ?
+  `).get(req.params.id);
+
+  if (!row) {
+    return res.json(formatQuestion({}).progress); // return default Unsolved
+  }
+
+  row.tags = parseJSON(row.tags);
+  res.json(formatQuestion(row).progress); // cheat to format
 });
 
 // ============================================================
-// PATCH /api/v1/progress/:id  — ALL business logic here
+// PATCH /api/v1/progress/:id
 // ============================================================
 app.patch('/api/v1/progress/:id', (req, res) => {
   const id = req.params.id;
   const updates = req.body;
 
-  // MS-4.5: Return 404 if question doesn't exist (custom or global)
-  if (!questionMap.has(id)) {
+  const qExists = db.prepare('SELECT 1 FROM questions WHERE id = ?').get(id);
+  if (!qExists) {
     return res.status(404).json({ code: 404, message: `Question ${id} not found`, requestId: req.requestId });
   }
 
-  const existing = progressMap.get(id) || {};
-
-
-  let newProgress;
-
-  if (updates.status === 'Unsolved') {
-    // Full reset — preserve tags & starred
-    newProgress = {
-      status: 'Unsolved',
-      dateSolved: null,
-      confidenceLevel: null,
-      nextRevisionDate: null,
-      revise: false,
-      attempts: 0,
-      timeSpent: existing.timeSpent || 0,
-      notes: '',
-      tags: existing.tags || [],
-      pattern: '',
-      solutionLink: '',
-      important: existing.important || false,
-    };
-  } else if (updates.status === 'Solved') {
-    // dateSolved: preserve existing (already solved) or stamp now (first solve)
-    // NEVER accept client-supplied dateSolved — server is authoritative
-    const dateSolved = existing.dateSolved || new Date().toISOString();
-    const confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
-    const nextRevisionDate = calcNextRevisionDate(confidenceLevel);
-    const tags = normalizeTags(updates.tags, existing.tags);
-    // Destructure dateSolved/nextRevisionDate out of updates to prevent override
-    const { dateSolved: _ds, nextRevisionDate: _nrd, ...safeUpdates } = updates;
-    newProgress = {
-      ...existing,
-      ...safeUpdates,
-      status: 'Solved',
-      dateSolved,
-      confidenceLevel,
-      nextRevisionDate,
-      revise: existing.revise || false,
-      attempts: updates.attempts || Math.max(existing.attempts || 0, 1),
-      tags,
-    };
-  } else if (updates.revise === true) {
-    const confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
-    const nextRevisionDate = updates.nextRevisionDate || calcNextRevisionDate(confidenceLevel);
-    const tags = normalizeTags(updates.tags, existing.tags);
-    newProgress = { ...existing, ...updates, revise: true, nextRevisionDate, tags };
-  } else if (updates.revise === false) {
-    const tags = normalizeTags(updates.tags, existing.tags);
-    newProgress = { ...existing, ...updates, revise: false, nextRevisionDate: null, tags };
-  } else if (updates.confidenceLevel !== undefined && existing.revise) {
-    // Re-schedule when confidence changes during active revision
-    const tags = normalizeTags(updates.tags, existing.tags);
-    newProgress = { ...existing, ...updates, nextRevisionDate: calcNextRevisionDate(updates.confidenceLevel), tags };
-  } else {
-    const tags = normalizeTags(updates.tags, existing.tags);
-    newProgress = { ...existing, ...updates, tags };
-  }
-
-  progressMap.set(id, newProgress);
-  invalidateAnalyticsCache();
-  saveProgress();
-
-  res.json(formatProgress(newProgress));
+  upsertProgress(id, updates);
+  
+  const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
+  updated.tags = parseJSON(updated.tags);
+  res.json(formatQuestion(updated).progress);
 });
 
 // ============================================================
-// POST /api/v1/progress/bulk  — batch update (flashcard mode)
+// POST /api/v1/progress/bulk
 // ============================================================
 app.post('/api/v1/progress/bulk', (req, res) => {
   const { updates } = req.body;
@@ -468,149 +255,140 @@ app.post('/api/v1/progress/bulk', (req, res) => {
   const results = [];
   let skipped = 0;
 
-  for (const item of updates) {
-    const { id, ...fields } = item;
-    if (!id) { skipped++; continue; }
-    if (!questionMap.has(id)) { skipped++; continue; } // skip orphans silently
+  db.transaction(() => {
+    for (const item of updates) {
+      const { id, ...fields } = item;
+      if (!id) { skipped++; continue; }
+      const qExists = db.prepare('SELECT 1 FROM questions WHERE id = ?').get(id);
+      if (!qExists) { skipped++; continue; }
 
-    const existing = progressMap.get(id) || {};
-    let merged;
-
-    // Apply same SRS state machine as PATCH
-    if (fields.revise === true) {
-      const confidenceLevel = fields.confidenceLevel || existing.confidenceLevel || 3;
-      const nextRevisionDate = calcNextRevisionDate(confidenceLevel);
-      const tags = normalizeTags(fields.tags, existing.tags);
-      merged = { ...existing, ...fields, revise: true, confidenceLevel, nextRevisionDate, tags };
-    } else if (fields.revise === false) {
-      const tags = normalizeTags(fields.tags, existing.tags);
-      merged = { ...existing, ...fields, revise: false, nextRevisionDate: null, tags };
-    } else if (fields.confidenceLevel !== undefined && existing.revise) {
-      // Reschedule when confidence changes and already in revision
-      const tags = normalizeTags(fields.tags, existing.tags);
-      merged = { ...existing, ...fields, nextRevisionDate: calcNextRevisionDate(fields.confidenceLevel), tags };
-    } else {
-      const tags = normalizeTags(fields.tags, existing.tags);
-      merged = { ...existing, ...fields, tags };
+      upsertProgress(id, fields);
+      const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
+      updated.tags = parseJSON(updated.tags);
+      results.push({ id, progress: formatQuestion(updated).progress });
     }
+  })();
 
-    progressMap.set(id, merged);
-    results.push({ id, progress: formatProgress(merged) });
-  }
-
-  invalidateAnalyticsCache();
-  saveProgress();
   res.json({ updated: results.length, skipped, results });
 });
 
+function upsertProgress(id, updates) {
+  let existing = db.prepare(`SELECT * FROM progress WHERE id = ?`).get(id) || { attempts: 0, timeSpent: 0, important: 0, revise: 0, status: 'Unsolved' };
+  let tagsObj = db.prepare(`SELECT tag FROM progress_tags WHERE progress_id = ?`).all(id).map(t => t.tag);
+
+  let newP = { ...existing };
+
+  if (updates.status === 'Unsolved') {
+    newP.status = 'Unsolved';
+    newP.dateSolved = null;
+    newP.confidenceLevel = null;
+    newP.nextRevisionDate = null;
+    newP.revise = 0;
+    newP.attempts = 0;
+    newP.timeSpent = 0;
+    newP.notes = '';
+    newP.pattern = '';
+    newP.solutionLink = '';
+    newP.important = 0;
+    updates.tags = [];
+  } else if (updates.status === 'Solved') {
+    newP.dateSolved = existing.dateSolved || new Date().toISOString();
+    newP.confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
+    newP.nextRevisionDate = calcNextRevisionDate(newP.confidenceLevel);
+    newP.status = 'Solved';
+    newP.attempts = updates.attempts !== undefined ? updates.attempts : Math.max(existing.attempts || 0, 1);
+  } else if (updates.status === 'Attempted') {
+    newP.status = 'Attempted';
+    newP.attempts = updates.attempts !== undefined ? updates.attempts : Math.max(existing.attempts || 0, 1);
+  } else if (updates.revise === true) {
+    newP.confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
+    newP.nextRevisionDate = updates.nextRevisionDate || calcNextRevisionDate(newP.confidenceLevel);
+    newP.revise = 1;
+  } else if (updates.revise === false) {
+    newP.revise = 0;
+    newP.nextRevisionDate = null;
+  } else if (updates.confidenceLevel !== undefined && existing.revise) {
+    newP.confidenceLevel = updates.confidenceLevel;
+    newP.nextRevisionDate = calcNextRevisionDate(updates.confidenceLevel);
+  }
+
+  // Merge remaining fields
+  if (updates.attempts !== undefined && updates.status !== 'Unsolved') newP.attempts = updates.attempts;
+  if (updates.timeSpent !== undefined) newP.timeSpent = updates.timeSpent;
+  if (updates.notes !== undefined) newP.notes = updates.notes;
+  if (updates.pattern !== undefined && updates.status !== 'Unsolved') newP.pattern = updates.pattern;
+  if (updates.solutionLink !== undefined && updates.status !== 'Unsolved') newP.solutionLink = updates.solutionLink;
+  if (updates.important !== undefined) newP.important = updates.important ? 1 : 0;
+  if (updates.confidenceLevel !== undefined && updates.status !== 'Unsolved') newP.confidenceLevel = updates.confidenceLevel;
+
+  db.prepare(`
+    INSERT INTO progress (id, status, dateSolved, confidenceLevel, nextRevisionDate, revise, attempts, timeSpent, notes, pattern, solutionLink, important)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      status=excluded.status, dateSolved=excluded.dateSolved, confidenceLevel=excluded.confidenceLevel,
+      nextRevisionDate=excluded.nextRevisionDate, revise=excluded.revise, attempts=excluded.attempts,
+      timeSpent=excluded.timeSpent, notes=excluded.notes, pattern=excluded.pattern,
+      solutionLink=excluded.solutionLink, important=excluded.important
+  `).run(id, newP.status, newP.dateSolved, newP.confidenceLevel, newP.nextRevisionDate, newP.revise, newP.attempts, newP.timeSpent, newP.notes, newP.pattern, newP.solutionLink, newP.important);
+
+  if (updates.tags !== undefined) {
+    const newTags = normalizeTags(updates.tags, tagsObj);
+    db.prepare(`DELETE FROM progress_tags WHERE progress_id = ?`).run(id);
+    const insertTag = db.prepare(`INSERT INTO progress_tags (progress_id, tag) VALUES (?, ?)`);
+    for (const t of newTags) insertTag.run(id, t);
+  }
+}
 
 // ============================================================
-// GET /api/v1/stats  — lightweight stats for StatsBar/streak
+// GET /api/v1/stats & /api/v1/analytics
 // ============================================================
-app.get('/api/v1/stats', (req, res) => {
-  const cached = getOrComputeAnalytics();
-  res.json({
-    totalSolved: cached.totalSolved,
-    totalAttempted: cached.totalAttempted,
-    totalQuestions: cached.totalQuestions,
-    totalRevise: cached.totalRevise,
-    currentStreak: cached.currentStreak,
-    maxStreak: cached.maxStreak,
-    weeklyCount: cached.weeklyCount,
-    activityTimeline: cached.activityTimeline,
-    difficultyBreakdown: cached.difficultyBreakdown,
-  });
-});
 
-// ============================================================
-// GET /api/v1/analytics  — full analytics (Dashboard)
-// ============================================================
-app.get('/api/v1/analytics', (req, res) => {
-  res.json(getOrComputeAnalytics());
-});
+function computeAnalytics() {
+  const baseStats = db.prepare(`
+    SELECT
+      COUNT(CASE WHEN p.status = 'Solved' THEN 1 END) as totalSolved,
+      COUNT(CASE WHEN p.status = 'Attempted' THEN 1 END) as totalAttempted,
+      COUNT(CASE WHEN p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now')) THEN 1 END) as totalRevise,
+      COUNT(CASE WHEN p.important = 1 THEN 1 END) as totalFavourite,
+      (SELECT COUNT(*) FROM questions) as totalQuestions
+    FROM progress p
+  `).get();
 
-// ============================================================
-// ANALYTICS COMPUTATION (cached)
-// ============================================================
-function getOrComputeAnalytics() {
-  if (analyticsCache) return analyticsCache;
-
-  let totalSolved = 0;
-  let totalAttempted = 0;
-  let totalRevise = 0;
-  const totalQuestions = questionMap.size;
-  const now = new Date();
+  const difficultyRows = db.prepare(`
+    SELECT q.difficulty, COUNT(*) as count, SUM(p.timeSpent) as timeSpent
+    FROM progress p JOIN questions q ON p.id = q.id
+    WHERE p.status = 'Solved'
+    GROUP BY q.difficulty
+  `).all();
 
   const diffs = { Easy: 0, Medium: 0, Hard: 0 };
-  const revList = [];
-  const activityTimeline = {}; // { "2025-06-01": 3 }
-  const companyCounts = {};
-  const patternCounts = {};  // pattern → { solved, total }
-  const timeByDiff = { easy: { sum: 0, count: 0 }, medium: { sum: 0, count: 0 }, hard: { sum: 0, count: 0 } };
-
-  for (const [id, p] of progressMap) {
-    const q = questionMap.get(id);
-    if (!q) continue;
-
-    const status = p.status || 'Unsolved';
-    const isSolved = status === 'Solved';
-    const isAttempted = status === 'Attempted';
-
-    if (isSolved) {
-      totalSolved++;
-      const diffKey = q.difficulty; // 'Easy' | 'Medium' | 'Hard'
-      if (diffs[diffKey] !== undefined) diffs[diffKey]++;
-
-      // Activity heatmap
-      if (p.dateSolved) {
-        const ds = new Date(p.dateSolved);
-        if (!isNaN(ds)) {
-          const dateStr = ds.toISOString().split('T')[0];
-          activityTimeline[dateStr] = (activityTimeline[dateStr] || 0) + 1;
-        }
-      }
-
-      // Company coverage
-      q.companies.forEach(c => {
-        companyCounts[c] = (companyCounts[c] || 0) + 1;
-      });
-
-      // Time per difficulty (stored in seconds, convert to minutes)
-      if (p.timeSpent && p.timeSpent > 0) {
-        const diffLow = q.diffLower;
-        if (timeByDiff[diffLow]) {
-          timeByDiff[diffLow].sum += p.timeSpent;
-          timeByDiff[diffLow].count++;
-        }
-      }
-
-      // Pattern mastery
-      if (p.pattern) {
-        if (!patternCounts[p.pattern]) patternCounts[p.pattern] = { solved: 0, total: 0 };
-        patternCounts[p.pattern].solved++;
-        patternCounts[p.pattern].total++;
-      }
-    } else if (isAttempted) {
-      totalAttempted++;
-    }
-
-    // Revision queue
-    const isDue = p.nextRevisionDate && new Date(p.nextRevisionDate) <= now;
-    if (p.revise || isDue) {
-      totalRevise++;
-      revList.push({
-        id: q.id,
-        title: q.title,
-        difficulty: q.difficulty,
-        nextRevisionDate: p.nextRevisionDate || null,
-      });
+  const avgTimePerDiff = [];
+  for (const r of difficultyRows) {
+    if (r.difficulty) {
+      diffs[r.difficulty] = r.count;
+      avgTimePerDiff.push({ name: r.difficulty, avgMinutes: Math.round(r.timeSpent / 60 / r.count) });
     }
   }
 
-  // --- Streak calculation ---
+  // Activity Timeline (daily counts)
+  const activityRows = db.prepare(`
+    SELECT date(dateSolved) as dateStr, COUNT(*) as count
+    FROM progress
+    WHERE status = 'Solved' AND dateSolved IS NOT NULL
+    GROUP BY date(dateSolved)
+    ORDER BY dateStr ASC
+  `).all();
+
+  const activityTimeline = {};
+  const problemsSolvedOverTime = [];
+  activityRows.forEach(r => {
+    activityTimeline[r.dateStr] = r.count;
+    problemsSolvedOverTime.push({ date: r.dateStr, count: r.count });
+  });
+
+  // Calculate Streak
   const sortedDates = Object.keys(activityTimeline).sort();
   let currentStreak = 0, maxStreak = 0;
-
   if (sortedDates.length > 0) {
     let streak = 1;
     for (let i = 1; i < sortedDates.length; i++) {
@@ -635,245 +413,265 @@ function getOrComputeAnalytics() {
 
   // Weekly count
   const sevenAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-  const weeklyCount = Object.entries(activityTimeline)
-    .filter(([d]) => d >= sevenAgoStr)
-    .reduce((s, [, c]) => s + c, 0);
+  const weeklyCount = activityRows.filter(r => r.dateStr >= sevenAgoStr).reduce((acc, r) => acc + r.count, 0);
 
-  // Top companies
-  const topCompanies = Object.entries(companyCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 15)
-    .map(([name, count]) => ({ name, count }));
+  // Top Companies
+  const topCompanies = db.prepare(`
+    SELECT qc.company_slug as name, COUNT(DISTINCT qc.question_id) as count
+    FROM question_company_frequencies qc
+    JOIN progress p ON qc.question_id = p.id
+    WHERE p.status = 'Solved'
+    GROUP BY qc.company_slug
+    ORDER BY count DESC
+    LIMIT 15
+  `).all();
 
-  // Avg time per difficulty (minutes)
-  const avgTimePerDiff = ['Easy', 'Medium', 'Hard'].map(d => ({
-    name: d,
-    avgMinutes: timeByDiff[d.toLowerCase()].count
-      ? Math.round(timeByDiff[d.toLowerCase()].sum / 60 / timeByDiff[d.toLowerCase()].count)
-      : 0,
-  }));
+  // Pattern Mastery & Usage
+  const patternMasteryRows = db.prepare(`
+    SELECT pattern as name, 
+           COUNT(CASE WHEN status = 'Solved' THEN 1 END) as solved,
+           COUNT(*) as total
+    FROM progress
+    WHERE pattern IS NOT NULL AND pattern != ''
+    GROUP BY pattern
+    ORDER BY solved DESC
+  `).all();
+  
+  const patternMasteryData = patternMasteryRows.map(r => ({
+    name: r.name,
+    solved: r.solved,
+    score: r.total > 0 ? Math.round((r.solved / r.total) * 100) : 0
+  })).slice(0, 10);
+  
+  const patternUsageFrequency = patternMasteryRows.map(r => ({ name: r.name, count: r.solved })).filter(r => r.count > 0);
+  const problemsByPattern = patternMasteryRows.map(r => ({ name: r.name, count: r.total }));
 
-  // Pattern mastery (solved / total attempted × 100)
-  const patternMasteryData = Object.entries(patternCounts)
-    .map(([name, { solved, total }]) => ({
-      name,
-      solved,
-      score: total > 0 ? Math.round((solved / total) * 100) : 0,
-    }))
-    .sort((a, b) => b.solved - a.solved)
-    .slice(0, 10);
+  // Tags Frequency
+  const tagsFrequency = db.prepare(`
+    SELECT t.tag as name, COUNT(*) as count
+    FROM progress_tags t
+    JOIN progress p ON t.progress_id = p.id
+    WHERE p.status = 'Solved'
+    GROUP BY t.tag
+    ORDER BY count DESC
+  `).all();
 
-  analyticsCache = {
-    totalSolved,
-    totalAttempted,
-    totalQuestions,
-    totalRevise,
+  const problemsByTag = db.prepare(`
+    SELECT tag as name, COUNT(*) as count
+    FROM progress_tags
+    GROUP BY tag
+    ORDER BY count DESC
+  `).all();
+
+  // Confidence vs Difficulty
+  const confDiffRows = db.prepare(`
+    SELECT q.difficulty, p.confidenceLevel, COUNT(*) as count
+    FROM progress p JOIN questions q ON p.id = q.id
+    WHERE p.status = 'Solved' AND p.confidenceLevel IS NOT NULL
+    GROUP BY q.difficulty, p.confidenceLevel
+  `).all();
+  
+  const confDiffMap = { Easy: { level1: 0, level2: 0, level3: 0, level4: 0 }, Medium: { level1: 0, level2: 0, level3: 0, level4: 0 }, Hard: { level1: 0, level2: 0, level3: 0, level4: 0 } };
+  confDiffRows.forEach(r => {
+    if (confDiffMap[r.difficulty]) {
+      confDiffMap[r.difficulty][`level${r.confidenceLevel}`] = r.count;
+    }
+  });
+  const confidenceVsDifficulty = ['Easy', 'Medium', 'Hard'].map(d => ({ difficulty: d, ...confDiffMap[d] }));
+
+  // Time Per Diff Over Time
+  const timeDiffRows = db.prepare(`
+    SELECT date(p.dateSolved) as dateStr, q.difficulty, AVG(p.timeSpent) as avgTime
+    FROM progress p JOIN questions q ON p.id = q.id
+    WHERE p.status = 'Solved' AND p.timeSpent > 0 AND p.dateSolved IS NOT NULL
+    GROUP BY dateStr, q.difficulty
+    ORDER BY dateStr ASC
+  `).all();
+
+  const timeDiffMap = {};
+  timeDiffRows.forEach(r => {
+    if (!timeDiffMap[r.dateStr]) timeDiffMap[r.dateStr] = { date: r.dateStr, Easy: 0, Medium: 0, Hard: 0 };
+    timeDiffMap[r.dateStr][r.difficulty] = Math.round(r.avgTime / 60);
+  });
+  const timePerDiffOverTime = Object.values(timeDiffMap);
+
+  // Patterns most revised
+  const patternsMostRevised = db.prepare(`
+    SELECT pattern as name, COUNT(*) as count
+    FROM progress
+    WHERE pattern IS NOT NULL AND pattern != '' AND (revise = 1 OR (nextRevisionDate IS NOT NULL AND datetime(nextRevisionDate) <= datetime('now')))
+    GROUP BY pattern
+    ORDER BY count DESC
+  `).all();
+
+  // Confidence to Problem count
+  const confidenceToProblemCount = db.prepare(`
+    SELECT confidenceLevel as level, COUNT(*) as count
+    FROM progress
+    WHERE status = 'Solved' AND confidenceLevel IS NOT NULL
+    GROUP BY confidenceLevel
+    ORDER BY level ASC
+  `).all();
+
+  const revisionList = db.prepare(`
+    SELECT q.id, q.title, q.difficulty, p.nextRevisionDate
+    FROM progress p JOIN questions q ON p.id = q.id
+    WHERE p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))
+    ORDER BY p.nextRevisionDate ASC
+    LIMIT 20
+  `).all();
+
+  return {
+    totalSolved: baseStats.totalSolved,
+    totalAttempted: baseStats.totalAttempted,
+    totalQuestions: baseStats.totalQuestions,
+    totalRevise: baseStats.totalRevise,
+    totalFavourite: baseStats.totalFavourite,
+    problemStatusOverview: [
+      { name: 'Solved', count: baseStats.totalSolved },
+      { name: 'Attempted', count: baseStats.totalAttempted },
+      { name: 'Unsolved', count: baseStats.totalQuestions - baseStats.totalSolved - baseStats.totalAttempted }
+    ],
     currentStreak,
     maxStreak,
     weeklyCount,
     activityTimeline,
+    calendar: problemsSolvedOverTime,
+    problemsSolvedOverTime,
     difficultyBreakdown: diffs,
     topCompanies,
-    platformsBreakdown: [{ name: 'LeetCode', count: totalSolved }],
+    platformsBreakdown: [{ name: 'LeetCode', count: baseStats.totalSolved }], // Stub
     avgTimePerDiff,
     patternMasteryData,
-    revisionList: revList.sort((a, b) => {
-      if (!a.nextRevisionDate) return 1;
-      if (!b.nextRevisionDate) return -1;
-      return new Date(a.nextRevisionDate) - new Date(b.nextRevisionDate);
-    }).slice(0, 20),
+    patternUsageFrequency,
+    tagsFrequency,
+    problemsByPattern,
+    problemsByTag,
+    confidenceVsDifficulty,
+    timePerDiffOverTime,
+    patternsMostRevised,
+    confidenceToProblemCount,
+    revisionList,
   };
-
-  return analyticsCache;
 }
 
-// ============================================================
-// GET /api/v1/utilities
-// ============================================================
-app.get('/api/v1/utilities', (req, res) => {
+app.get('/api/v1/stats', (req, res) => {
+  const c = computeAnalytics();
   res.json({
-    difficulties: [
-      { id: 'diff-1', name: 'Easy' },
-      { id: 'diff-2', name: 'Medium' },
-      { id: 'diff-3', name: 'Hard' },
-    ],
-    platforms: platformsData,
-    patterns: patternsData,
-    tags: tagsData,
+    totalSolved: c.totalSolved,
+    totalAttempted: c.totalAttempted,
+    totalQuestions: c.totalQuestions,
+    totalRevise: c.totalRevise,
+    totalFavourite: c.totalFavourite,
+    currentStreak: c.currentStreak,
+    maxStreak: c.maxStreak,
+    weeklyCount: c.weeklyCount,
+    activityTimeline: c.activityTimeline,
+    difficultyBreakdown: c.difficultyBreakdown,
   });
 });
 
-// ============================================================
-// GET /api/v1/companies  — sorted by question count
-// ============================================================
-app.get('/api/v1/companies', (req, res) => {
-  const companies = Array.from(companyIndex.entries())
-    .map(([name, ids]) => ({ name, slug: name, count: ids.size }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-
-  // Add custom questions pseudo-company
-  const customCount = questionList.filter(q => q.isCustom).length;
-  const result = [
-    { name: 'Custom Questions', slug: 'custom questions', count: customCount },
-    ...companies,
-  ];
-
-  res.json(result);
+app.get('/api/v1/analytics', (req, res) => {
+  res.json(computeAnalytics());
 });
 
 // ============================================================
-// POST /api/v1/custom-questions
+// Utilities
 // ============================================================
+app.get('/api/v1/utilities', (req, res) => {
+  const patterns = db.prepare('SELECT id, name, description FROM patterns').all();
+  const platforms = db.prepare('SELECT id, name, description FROM platforms').all();
+  const tags = db.prepare('SELECT id, name, description FROM tags').all();
+  res.json({
+    difficulties: [{ id: 'diff-1', name: 'Easy' }, { id: 'diff-2', name: 'Medium' }, { id: 'diff-3', name: 'Hard' }],
+    platforms, patterns, tags
+  });
+});
+
+app.get('/api/v1/patterns', (req, res) => {
+  res.json(db.prepare('SELECT id, name, description FROM patterns').all());
+});
+app.post('/api/v1/patterns', (req, res) => {
+  const id = 'pat-' + Date.now();
+  db.prepare('INSERT INTO patterns (id, name, description) VALUES (?, ?, ?)').run(id, req.body.name, req.body.description || '');
+  res.status(201).json({ id, name: req.body.name, description: req.body.description || '' });
+});
+
+app.get('/api/v1/platforms', (req, res) => {
+  res.json(db.prepare('SELECT id, name, description FROM platforms').all());
+});
+app.post('/api/v1/platforms', (req, res) => {
+  const id = 'plat-' + Date.now();
+  db.prepare('INSERT INTO platforms (id, name, description) VALUES (?, ?, ?)').run(id, req.body.name, req.body.description || '');
+  res.status(201).json({ id, name: req.body.name, description: req.body.description || '' });
+});
+
+app.get('/api/v1/tags', (req, res) => {
+  res.json(db.prepare('SELECT id, name, description FROM tags').all());
+});
+app.post('/api/v1/tags', (req, res) => {
+  const id = 'tag-' + Date.now();
+  db.prepare('INSERT INTO tags (id, name, description) VALUES (?, ?, ?)').run(id, req.body.name, req.body.description || '');
+  res.status(201).json({ id, name: req.body.name, description: req.body.description || '' });
+});
+
+app.get('/api/v1/companies', (req, res) => {
+  const companies = db.prepare(`
+    SELECT company_slug as name, company_slug as slug, COUNT(DISTINCT question_id) as count 
+    FROM question_company_frequencies 
+    GROUP BY company_slug 
+    ORDER BY count DESC
+  `).all();
+  const customCount = db.prepare('SELECT COUNT(*) as count FROM questions WHERE isCustom = 1').get().count;
+  res.json([{ name: 'Custom Questions', slug: 'custom questions', count: customCount }, ...companies]);
+});
+
 app.post('/api/v1/custom-questions', (req, res) => {
   const id = req.body.id || 'custom-' + Date.now();
   const difficulty = req.body.difficulty || 'Medium';
   const diffLower = difficulty.toLowerCase();
 
-  const customQ = {
-    id,
-    title: req.body.title,
-    titleLower: req.body.title.toLowerCase(),
-    url: req.body.link || '',
-    difficulty,
-    diffLower,
-    acceptanceRate: '-',
-    frequency: 0,
-    companies: [],
-    isCustom: true,
-  };
-
-  questionMap.set(id, customQ);
-  questionList.push(customQ);
-  if (difficultyIndex.has(diffLower)) difficultyIndex.get(diffLower).add(id);
+  db.prepare(`
+    INSERT INTO questions (id, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
+    VALUES (?, ?, ?, ?, ?, ?, '-', 0, 1)
+  `).run(id, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower);
 
   const confidenceLevel = req.body.confidenceLevel || null;
   const isSolved = !!confidenceLevel;
-  const tags = normalizeTags(req.body.tags);
-
+  
   const progress = {
     status: isSolved ? 'Solved' : 'Attempted',
-    dateSolved: isSolved ? new Date().toISOString() : null,
     confidenceLevel,
-    nextRevisionDate: confidenceLevel ? calcNextRevisionDate(confidenceLevel) : null,
-    attempts: 1,
-    timeSpent: (req.body.timeTaken || 0) * 60, // minutes → seconds
-    notes: '',
-    tags,
+    timeSpent: (req.body.timeTaken || 0) * 60,
+    tags: normalizeTags(req.body.tags),
     pattern: req.body.pattern || '',
-    solutionLink: '',
-    important: false,
-    revise: false,
   };
+  upsertProgress(id, progress);
 
-  progressMap.set(id, progress);
-  invalidateAnalyticsCache();
-  saveProgress();
-
-  res.status(201).json({ success: true, question: formatQuestion(customQ, progress) });
+  const row = db.prepare(`SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags FROM questions q LEFT JOIN progress p ON q.id = p.id WHERE q.id = ?`).get(id);
+  res.status(201).json({ success: true, question: formatQuestion(row) });
 });
 
-// ============================================================
-// METADATA ROUTES  (patterns, platforms, tags)
-// ============================================================
-function setupMetadataRoute(routePath, dataArray) {
-  app.get(`/api/v1/${routePath}`, (_req, res) => res.json(dataArray));
-
-  app.post(`/api/v1/${routePath}`, (req, res) => {
-    const newItem = {
-      id: `${routePath}-${Date.now()}`,
-      name: req.body.name,
-      description: req.body.description || '',
-    };
-    dataArray.push(newItem);
-    // 201 Created per API contract
-    res.status(201).json({ item: newItem });
-  });
-}
-
-setupMetadataRoute('patterns', patternsData);
-setupMetadataRoute('platforms', platformsData);
-setupMetadataRoute('tags', tagsData);
-
-// ============================================================
-// HELPERS
-// ============================================================
-function normalizeTags(incoming, existing = []) {
-  if (incoming === undefined) return Array.isArray(existing) ? existing : [];
-  if (Array.isArray(incoming)) return incoming.map(t => t.trim()).filter(Boolean);
-  if (typeof incoming === 'string') return incoming.split(',').map(t => t.trim()).filter(Boolean);
-  return Array.isArray(existing) ? existing : [];
-}
-
-// ============================================================
-// ERROR HANDLER
-// ============================================================
-// MS-4.7: Structured error handler — always returns consistent JSON
+// Error Handler
 app.use((err, req, res, _next) => {
   const status = err.status || 500;
-  const level = status >= 500 ? '\u2717 SERVER' : '\u26a0 CLIENT';
-  console.error(`[${level}] reqId=${req.requestId} ${req.method} ${req.path} → ${err.message}`);
-  if (err.errors) console.error('  Validation:', JSON.stringify(err.errors));
-  res.status(status).json({
-    code: status,
-    message: err.message || 'Internal Server Error',
-    errors: err.errors || [],
-    requestId: req.requestId,
-  });
+  console.error(`[ERR] reqId=${req.requestId} ${req.method} ${req.path} -> ${err.message}`);
+  res.status(status).json({ code: status, message: err.message, errors: err.errors || [], requestId: req.requestId });
 });
 
-// MS-7.8: Health check endpoint
 app.get('/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    uptime: Math.round(process.uptime()),
-    questionsLoaded: questionMap.size,
-    companiesIndexed: companyIndex.size,
-    progressRecords: progressMap.size,
-    analyticsCached: analyticsCache !== null,
-    timestamp: new Date().toISOString(),
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-
-// MS-7.9: Startup orphan cleanup
-function cleanupOrphans() {
-  let removed = 0;
-  for (const id of progressMap.keys()) {
-    if (!questionMap.has(id)) {
-      progressMap.delete(id);
-      removed++;
-    }
-  }
-  if (removed > 0) {
-    console.log(`\u26a0 Removed ${removed} orphaned progress records (questions no longer exist)`);
-  }
-}
-
-// ── Startup sequence ─────────────────────────────────────────────────────
-const startTime = Date.now();
-loadGlobalQuestions();
-loadProgress();
-cleanupOrphans();
-const loadMs = Date.now() - startTime;
 
 const server = app.listen(PORT, () => {
-  console.log(`\n\u{1F680} Mock Server \u2192 http://localhost:${PORT}`);
-  console.log(`   ${questionMap.size.toLocaleString()} questions | ${companyIndex.size.toLocaleString()} companies | ${progressMap.size} progress records`);
-  console.log(`   Startup: ${loadMs}ms | OpenAPI contract enforced`);
-  console.log(`   Health: http://localhost:${PORT}/health\n`);
+  console.log(`\n🚀 Mock Server SQLite \u2192 http://localhost:${PORT}`);
 });
 
-// MS-7.7: Graceful shutdown
 function shutdown(signal) {
-  console.log(`\n[SHUTDOWN] Received ${signal} — flushing writes and exiting...`);
-  clearTimeout(_saveTimer);
-  // Flush any pending progress write synchronously before exit
-  const obj = Object.fromEntries(progressMap);
-  try { fs.writeFileSync(PROGRESS_DATA_PATH, JSON.stringify(obj, null, 2)); } catch {}
-  server.close(() => {
-    console.log('[SHUTDOWN] Server closed.');
-    process.exit(0);
-  });
-  setTimeout(() => process.exit(1), 5000); // force exit after 5s
+  console.log(`\n[SHUTDOWN] Received ${signal}`);
+  db.close();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 3000);
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

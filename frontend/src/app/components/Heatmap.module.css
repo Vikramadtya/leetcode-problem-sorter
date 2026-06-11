@@ -57,3 +57,11 @@
 .legendText {
   margin: 0 4px;
 }
+
+/* ── Static legend colour cells ─────────────────────────────────────────── */
+/* These mirror the getColor() function buckets but as static CSS classes.  */
+.cellL0 { background-color: var(--bg-main); }
+.cellL1 { background-color: var(--primary-light, #34d399); }
+.cellL2 { background-color: var(--primary); }
+.cellL3 { background-color: var(--primary-dark, #059669); }
+

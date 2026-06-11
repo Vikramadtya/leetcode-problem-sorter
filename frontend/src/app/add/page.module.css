@@ -95,6 +95,7 @@
   gap: 0.5rem;
 }
 
+/* Interactive tag toggle buttons (used on /add) */
 .tagBtn {
   background: var(--bg-main);
   border: 1px dashed var(--border-color);
@@ -115,6 +116,27 @@
   color: white;
   border: 1px solid var(--primary);
 }
+
+/* Read-only display items (used on /tags, /patterns, /platforms) */
+.tagItem {
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* Description sub-text inside tagItem */
+.tagItemDesc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
 
 .actions {
   display: flex;

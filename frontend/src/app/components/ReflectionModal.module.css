@@ -62,6 +62,8 @@
   color: var(--text-muted);
 }
 
+/* ── Form fields ── */
+
 .textarea {
   width: 100%;
   background-color: var(--bg-main);
@@ -76,6 +78,24 @@
 }
 
 .textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Text / URL inputs — same base style as textarea */
+.input {
+  width: 100%;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.input:focus {
   outline: none;
   border-color: var(--primary);
 }
@@ -96,6 +116,7 @@
   outline: none;
   border-color: var(--primary);
 }
+
 
 .strengthGrid {
   display: grid;

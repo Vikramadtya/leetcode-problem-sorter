@@ -25,7 +25,6 @@ if (isMockMode || !hasGoogleAuth) {
         password: { label: "Password (any)", type: "password", placeholder: "test" }
       },
       async authorize(credentials) {
-        // Accept any login in mock mode
         return { id: "mock-user-1", name: credentials?.username || "Test User", email: "test@example.com" };
       }
     })
@@ -36,14 +35,22 @@ export const authOptions = {
   providers,
   secret: process.env.NEXTAUTH_SECRET || "mock-secret-for-local-dev-only",
   session: {
-    // We use JWT exclusively since DB management is offloaded to the Java Backend
     strategy: "jwt",
   },
   callbacks: {
-    session: async ({ session, token, user }) => {
-      if (session?.user) {
-        session.user.id = user?.id || token?.sub; 
+    /** Store Google id_token in JWT for backend API authorization */
+    async jwt({ token, account }) {
+      if (account) {
+        token.idToken = account.id_token;
       }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session?.user) {
+        session.user.id = token?.sub;
+      }
+      // Surface idToken on session for authenticated backend requests
+      session.idToken = token.idToken;
       return session;
     },
   },

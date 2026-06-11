@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -27,7 +29,7 @@ export default function FlashcardMode({ questions, onClose, onBulkSave }) {
       <div className={styles.overlay}>
         <div className={styles.modalContent}>
           <h3>No problems due for revision today!</h3>
-          <p>You're all caught up. Go solve some new problems.</p>
+          <p>You&apos;re all caught up. Go solve some new problems.</p>
           <button className={styles.closeBtn} onClick={onClose}>Close</button>
         </div>
       </div>
@@ -81,15 +83,12 @@ export default function FlashcardMode({ questions, onClose, onBulkSave }) {
           <span className={styles.counter}>{currentIndex + 1} / {questions.length}</span>
         </div>
 
-        {/* Phase 4.3: progress bar */}
-        <div style={{ width: '100%', height: '4px', background: 'var(--border-color)', borderRadius: '2px', marginBottom: '1rem' }}>
-          <div style={{
-            width: `${((currentIndex) / questions.length) * 100}%`,
-            height: '100%',
-            background: 'var(--primary)',
-            borderRadius: '2px',
-            transition: 'width 0.3s ease',
-          }} />
+        {/* Progress bar — fills as cards are completed */}
+        <div className={styles.progressTrack}>
+          <div
+            className={styles.progressFill}
+            style={{ width: `${(currentIndex / questions.length) * 100}%` }}
+          />
         </div>
 
         <div className={styles.flashcardContainer}>

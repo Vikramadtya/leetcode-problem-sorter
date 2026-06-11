@@ -8,13 +8,18 @@
     "notes": "",
     "pattern": "Dynamic Programming",
     "solutionLink": "http://localhost:3000/explore",
-    "revise": false
+    "revise": false,
+    "tags": []
   },
   "2": {
     "status": "Attempted",
-    "attempts": 1
+    "attempts": 1,
+    "tags": []
   },
   "4": {
-    "tags": "j, i"
+    "tags": [
+      "j",
+      "i"
+    ]
   }
 }
