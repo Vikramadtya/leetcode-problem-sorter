@@ -31,6 +31,7 @@ export default function MetadataPage({
   descPlaceholder,
   addLabel = 'Add',
   showDescription = false,
+  standalone = true,
 }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,16 +112,17 @@ export default function MetadataPage({
     }
   };
 
-  return (
-    <div className={styles.container}>
-      <Header authEnabled={authEnabled} />
-      <main className={styles.main}>
+  const content = (
+    <main className={styles.main} style={!standalone ? { padding: 0 } : {}}>
+      {standalone && (
         <div className={styles.headerArea}>
           <h1 className={styles.title}>{title}</h1>
           <p className={styles.subtitle}>{subtitle}</p>
         </div>
+      )}
 
-        {/* ── Add form ── */}
+
+      {/* ── Add form ── */}
         <form onSubmit={handleAdd} className={styles.formCard}>
           <div className={styles.formRow}>
             <div className={styles.formGroup}>
@@ -228,6 +230,14 @@ export default function MetadataPage({
           </div>
         )}
       </main>
+  );
+
+  if (!standalone) return content;
+
+  return (
+    <div className={styles.container}>
+      <Header authEnabled={authEnabled} />
+      {content}
     </div>
   );
 }

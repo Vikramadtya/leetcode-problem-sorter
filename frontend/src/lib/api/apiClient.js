@@ -185,6 +185,40 @@ class ApiClient {
     }
   }
 
+  async getAllComments() {
+    try {
+      const url = `${API_BASE}/comments`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, { headers });
+      if (res.status === 401) { this._handle401(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] getAllComments:', error);
+      toast.error('Failed to fetch comments');
+      throw error;
+    }
+  }
+
+  async submitSuggestion({ email, phone, note }) {
+    try {
+      const url = `${API_BASE}/suggestions`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email, phone, note })
+      });
+      if (res.status === 401) { this._handle401(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] submitSuggestion:', error);
+      toast.error('Failed to submit suggestion');
+      throw error;
+    }
+  }
+
   // ── Questions ─────────────────────────────────────────────────────────
 
   /**

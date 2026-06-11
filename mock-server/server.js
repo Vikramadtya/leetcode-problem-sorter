@@ -159,6 +159,8 @@ app.get('/api/v1/questions', (req, res) => {
       conditions.push(`(p.status IS NULL OR p.status = 'Unsolved')`);
     } else if (p.status === 'Added') {
       conditions.push(`q.isCustom = 1`);
+    } else if (p.status === 'Favourites') {
+      conditions.push(`p.important = 1`);
     } else {
       conditions.push(`p.status = ?`);
       params.push(p.status);
@@ -726,6 +728,19 @@ app.post('/api/v1/questions/:id/comments', (req, res) => {
   res.status(201).json({ id: commentId, question_id: id, content: content.trim(), created_at: createdAt });
 });
 
+// ============================================================
+// GET /api/v1/comments (Global)
+// ============================================================
+app.get('/api/v1/comments', (req, res) => {
+  const comments = db.prepare(`
+    SELECT c.*, q.title as questionTitle, q.diffLower as questionDifficulty, q.url as questionUrl, q.platformId
+    FROM comments c
+    JOIN questions q ON c.question_id = q.uuid
+    ORDER BY c.created_at DESC
+  `).all();
+  
+  res.json(comments);
+});
 app.put('/api/v1/comments/:id', (req, res) => {
   const { content } = req.body;
   if (!content || !content.trim()) {
@@ -884,6 +899,20 @@ app.post('/api/v1/custom-questions', (req, res) => {
 
   const row = db.prepare(`SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM questions q LEFT JOIN progress p ON q.uuid = p.id WHERE q.uuid = ?`).get(uuid);
   res.status(201).json({ success: true, question: formatQuestion(row) });
+});
+
+// ============================================================
+// POST /api/v1/suggestions
+// ============================================================
+app.post('/api/v1/suggestions', (req, res) => {
+  const { email, phone, note } = req.body;
+  const suggId = 'sug-' + randomUUID();
+  const createdAt = new Date().toISOString();
+  
+  db.prepare('INSERT INTO suggestions (id, email, phone, note, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(suggId, email || null, phone || null, note || null, createdAt);
+  
+  res.status(201).json({ id: suggId, message: 'Suggestion saved successfully' });
 });
 
 // Error Handler

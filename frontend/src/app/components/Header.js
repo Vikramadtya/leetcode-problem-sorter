@@ -36,28 +36,16 @@ function NavLinks({ authEnabled, session, pathname }) {
             Dashboard
           </Link>
           <Link
-            href="/patterns"
-            className={`${styles.navLink} ${pathname === '/patterns' ? styles.active : ''}`}
+            href="/configuration"
+            className={`${styles.navLink} ${pathname === '/configuration' ? styles.active : ''}`}
           >
-            Patterns
+            Configuration
           </Link>
           <Link
-            href="/platforms"
-            className={`${styles.navLink} ${pathname === '/platforms' ? styles.active : ''}`}
+            href="/comments"
+            className={`${styles.navLink} ${pathname === '/comments' ? styles.active : ''}`}
           >
-            Platforms
-          </Link>
-          <Link
-            href="/tags"
-            className={`${styles.navLink} ${pathname === '/tags' ? styles.active : ''}`}
-          >
-            Tags
-          </Link>
-          <Link
-            href="/settings"
-            className={`${styles.navLink} ${pathname === '/settings' ? styles.active : ''}`}
-          >
-            Settings
+            Comments
           </Link>
         </>
       )}

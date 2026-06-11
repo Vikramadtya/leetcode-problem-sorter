@@ -97,6 +97,11 @@ export default function RootLayout({ children }) {
               <ErrorBoundary>
                 {children}
               </ErrorBoundary>
+              
+              {/* Global Footer visible on all authenticated pages */}
+              <footer className="global-footer">
+                Made with <span className="heart">❤️</span> for the community.
+              </footer>
             </div>
           </AuthProvider>
         </ThemeProvider>

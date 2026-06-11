@@ -91,6 +91,14 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(question_id) REFERENCES questions(uuid) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS suggestions (
+    id TEXT PRIMARY KEY,
+    email TEXT,
+    phone TEXT,
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
   
   -- Create indexes for performance
   CREATE INDEX IF NOT EXISTS idx_questions_difficulty ON questions(diffLower);

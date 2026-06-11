@@ -54,8 +54,8 @@ import { useShallow }        from 'zustand/react/shallow';
 import styles from '../page.module.css';
 
 // Tab configuration driven by mode
-const TRACKER_TABS = ['All', 'Solved', 'Attempted'];
-const EXPLORE_TABS = ['All', 'Solved', 'Attempted', 'Unsolved', 'Added'];
+const TRACKER_TABS = ['All', 'Solved', 'Attempted', 'Favourites'];
+const EXPLORE_TABS = ['All', 'Solved', 'Attempted', 'Unsolved', 'Added', 'Favourites'];
 
 export default function TrackerPageShell({
   mode,
@@ -222,9 +222,10 @@ export default function TrackerPageShell({
 
   // ── Derived: only show analytics section when there is activity ───────────
   const hasActivity =
-    stats.solved > 0 ||
-    stats.attempted > 0 ||
-    (stats.activityTimeline && Object.keys(stats.activityTimeline).length > 0);
+    stats.totalSolved > 0 ||
+    stats.totalAttempted > 0 ||
+    (stats.activityTimeline && Object.keys(stats.activityTimeline).length > 0) ||
+    true; // Always show analytics so the user sees their streaks even when starting out
 
   // ── Reset action for error state ──────────────────────────────────────────
   const handleRetry = mode === 'tracker' ? resetToTrackerMode : resetToExploreMode;
@@ -272,8 +273,8 @@ export default function TrackerPageShell({
           </div>
         </div>
 
-        {/* ── Streak panel + heatmap (Tracker only, when user has activity) */}
-        {showStreaks && hasActivity && (
+        {/* ── Streak panel + heatmap (Tracker only) */}
+        {showStreaks && (
           <div className={styles.analyticsHub}>
             <div className={styles.streakPanel}>
               <div className={styles.streakBox}>
@@ -418,12 +419,6 @@ export default function TrackerPageShell({
         />
       )}
 
-      {/* ── Footer (Tracker only) ─────────────────────────────────────────── */}
-      {mode === 'tracker' && (
-        <footer className={styles.footer}>
-          Made with <span className={styles.heart}>❤️</span> for the community.
-        </footer>
-      )}
 
       {/* ── Floating Goal Widget ────────────────────────────────────────────── */}
       {authEnabled && (
