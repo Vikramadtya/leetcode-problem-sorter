@@ -148,6 +148,43 @@ class ApiClient {
     }
   }
 
+  async updateComment(id, content) {
+    try {
+      const url = `${API_BASE}/comments/${id}`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ content })
+      });
+      if (res.status === 401) { this._handle401(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] updateComment:', error);
+      toast.error('Failed to update comment');
+      throw error;
+    }
+  }
+
+  async deleteComment(id) {
+    try {
+      const url = `${API_BASE}/comments/${id}`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, {
+        method: 'DELETE',
+        headers
+      });
+      if (res.status === 401) { this._handle401(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] deleteComment:', error);
+      toast.error('Failed to delete comment');
+      throw error;
+    }
+  }
+
   // ── Questions ─────────────────────────────────────────────────────────
 
   /**
@@ -392,6 +429,37 @@ class ApiClient {
       return await res.json();
     } catch (error) {
       console.error(`[API] createMetadata (${type}):`, error.message);
+      throw error;
+    }
+  }
+
+  async updateMetadata(type, id, data) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/${type}/${id}`, {
+        method: 'PUT',
+        headers: await this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error(`[API] updateMetadata (${type}):`, error.message);
+      toast.error(`Failed to update ${type}`);
+      throw error;
+    }
+  }
+
+  async deleteMetadata(type, id) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/${type}/${id}`, {
+        method: 'DELETE',
+        headers: await this.getHeaders(),
+      });
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error(`[API] deleteMetadata (${type}):`, error.message);
+      toast.error(`Failed to delete ${type}`);
       throw error;
     }
   }

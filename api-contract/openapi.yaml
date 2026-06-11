@@ -1533,6 +1533,160 @@ paths:
               schema:
                 $ref: '#/components/schemas/Comment'
 
+  /comments/{id}:
+    put:
+      operationId: updateComment
+      tags: [Questions]
+      summary: Update a comment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+      responses:
+        '200':
+          description: Updated comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+    delete:
+      operationId: deleteComment
+      tags: [Questions]
+      summary: Delete a comment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted successfully
+
+  /platforms/{id}:
+    put:
+      operationId: updatePlatform
+      tags: [Metadata]
+      summary: Update a platform
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRequest'
+      responses:
+        '200':
+          description: Updated platform
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+    delete:
+      operationId: deletePlatform
+      tags: [Metadata]
+      summary: Delete a platform
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted successfully
+
+  /tags/{id}:
+    put:
+      operationId: updateTag
+      tags: [Metadata]
+      summary: Update a tag
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRequest'
+      responses:
+        '200':
+          description: Updated tag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+    delete:
+      operationId: deleteTag
+      tags: [Metadata]
+      summary: Delete a tag
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted successfully
+
+  /patterns/{id}:
+    put:
+      operationId: updatePattern
+      tags: [Metadata]
+      summary: Update a pattern
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRequest'
+      responses:
+        '200':
+          description: Updated pattern
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+    delete:
+      operationId: deletePattern
+      tags: [Metadata]
+      summary: Delete a pattern
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted successfully
+
   /health:
     get:
       operationId: getHealth

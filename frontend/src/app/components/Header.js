@@ -48,6 +48,12 @@ function NavLinks({ authEnabled, session, pathname }) {
             Platforms
           </Link>
           <Link
+            href="/tags"
+            className={`${styles.navLink} ${pathname === '/tags' ? styles.active : ''}`}
+          >
+            Tags
+          </Link>
+          <Link
             href="/settings"
             className={`${styles.navLink} ${pathname === '/settings' ? styles.active : ''}`}
           >

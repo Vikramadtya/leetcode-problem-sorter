@@ -726,6 +726,26 @@ app.post('/api/v1/questions/:id/comments', (req, res) => {
   res.status(201).json({ id: commentId, question_id: id, content: content.trim(), created_at: createdAt });
 });
 
+app.put('/api/v1/comments/:id', (req, res) => {
+  const { content } = req.body;
+  if (!content || !content.trim()) {
+    return res.status(400).json({ code: 400, message: 'Content is required', requestId: req.requestId });
+  }
+  const result = db.prepare('UPDATE comments SET content = ? WHERE id = ?').run(content.trim(), req.params.id);
+  if (result.changes === 0) {
+    return res.status(404).json({ code: 404, message: 'Comment not found', requestId: req.requestId });
+  }
+  res.json({ id: req.params.id, content: content.trim() });
+});
+
+app.delete('/api/v1/comments/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM comments WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) {
+    return res.status(404).json({ code: 404, message: 'Comment not found', requestId: req.requestId });
+  }
+  res.json({ message: 'Deleted successfully' });
+});
+
 // ============================================================
 // SETTINGS ENDPOINTS
 // ============================================================
@@ -777,6 +797,16 @@ app.post('/api/v1/patterns', (req, res) => {
   db.prepare('INSERT INTO patterns (id, name, description) VALUES (?, ?, ?)').run(id, req.body.name, req.body.description || '');
   res.status(201).json({ id, name: req.body.name, description: req.body.description || '' });
 });
+app.put('/api/v1/patterns/:id', (req, res) => {
+  const result = db.prepare('UPDATE patterns SET name = ?, description = ? WHERE id = ?').run(req.body.name, req.body.description || '', req.params.id);
+  if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Pattern not found' });
+  res.json({ id: req.params.id, name: req.body.name, description: req.body.description || '' });
+});
+app.delete('/api/v1/patterns/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM patterns WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Pattern not found' });
+  res.json({ message: 'Deleted successfully' });
+});
 
 app.get('/api/v1/platforms', (req, res) => {
   res.json(db.prepare('SELECT id, name, description FROM platforms').all());
@@ -786,6 +816,16 @@ app.post('/api/v1/platforms', (req, res) => {
   db.prepare('INSERT INTO platforms (id, name, description) VALUES (?, ?, ?)').run(id, req.body.name, req.body.description || '');
   res.status(201).json({ id, name: req.body.name, description: req.body.description || '' });
 });
+app.put('/api/v1/platforms/:id', (req, res) => {
+  const result = db.prepare('UPDATE platforms SET name = ?, description = ? WHERE id = ?').run(req.body.name, req.body.description || '', req.params.id);
+  if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Platform not found' });
+  res.json({ id: req.params.id, name: req.body.name, description: req.body.description || '' });
+});
+app.delete('/api/v1/platforms/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM platforms WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Platform not found' });
+  res.json({ message: 'Deleted successfully' });
+});
 
 app.get('/api/v1/tags', (req, res) => {
   res.json(db.prepare('SELECT id, name, description FROM tags').all());
@@ -794,6 +834,17 @@ app.post('/api/v1/tags', (req, res) => {
   const id = 'tag-' + Date.now();
   db.prepare('INSERT INTO tags (id, name, description) VALUES (?, ?, ?)').run(id, req.body.name, req.body.description || '');
   res.status(201).json({ id, name: req.body.name, description: req.body.description || '' });
+});
+app.put('/api/v1/tags/:id', (req, res) => {
+  const result = db.prepare('UPDATE tags SET name = ?, description = ? WHERE id = ?').run(req.body.name, req.body.description || '', req.params.id);
+  if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Tag not found' });
+  res.json({ id: req.params.id, name: req.body.name, description: req.body.description || '' });
+});
+app.delete('/api/v1/tags/:id', (req, res) => {
+  db.prepare('DELETE FROM progress_tags WHERE tag_id = ?').run(req.params.id);
+  const result = db.prepare('DELETE FROM tags WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Tag not found' });
+  res.json({ message: 'Deleted successfully' });
 });
 
 app.get('/api/v1/companies', (req, res) => {
