@@ -5,6 +5,7 @@ import config from "../config.json";
 import "./globals.css";
 import ParticlesBackground from "./components/ParticlesBackground";
 import OfflineBanner from "./components/OfflineBanner";
+import GlobalAudioListener from "./components/GlobalAudioListener";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // ── SEO Metadata ──────────────────────────────────────────────────────────────
@@ -70,6 +71,9 @@ export default function RootLayout({ children }) {
 
             {/* Theme-aware interactive particle canvas (client component, renders after hydration) */}
             <ParticlesBackground />
+
+            {/* Global sound effects listener */}
+            <GlobalAudioListener />
 
             {/* Page content — sits above the particle canvas (z-index: 1) */}
             <div className="app-content">
