@@ -23,14 +23,14 @@ function getDiffDotClass(diff) {
   return '';
 }
 
-export default function MiniInsights({ stats = {} }) {
+function MiniInsights({ 
+  stats = {}, 
+  recentActivity = [], 
+  upcomingRevisions = [], 
+  topPatterns = [] 
+}) {
   const settings = useAppStore(state => state.settings);
 
-  // 1. Recent Activity (from backend)
-  const recentActivity = stats.recentActivity || [];
-
-  // 2. Upcoming Revisions (from backend)
-  const upcomingRevisions = stats.upcomingRevisions || [];
 
   // 3. Goals
   const DAILY_GOAL = parseInt(settings?.dailyGoal || '2', 10);
@@ -72,8 +72,7 @@ export default function MiniInsights({ stats = {} }) {
   const hardPct = (hard / totalDiff) * 100;
 
   // 5. Top Patterns (from backend)
-  const topPatterns = stats.topPatterns || [];
-
+  // topPatterns is passed as prop
   return (
     <div className={styles.insightsContainer}>
       <div className={styles.widgetsGrid}>
@@ -89,7 +88,7 @@ export default function MiniInsights({ stats = {} }) {
                 {upcomingRevisions.map(q => (
                   <li key={q.id} className={styles.listItem}>
                     <div className={styles.diffDot} style={{ backgroundColor: getDiffColor(q.difficulty) }} />
-                    <a href={q.url} target="_blank" rel="noopener noreferrer" className={styles.itemLink}>
+                    <a href={q.url?.startsWith('http') ? q.url : '#'} target="_blank" rel="noopener noreferrer" className={styles.itemLink}>
                       {q.title}
                     </a>
                   </li>
@@ -112,7 +111,7 @@ export default function MiniInsights({ stats = {} }) {
                 {recentActivity.map(q => (
                   <li key={q.id} className={styles.listItem}>
                     <div className={styles.diffDot} style={{ backgroundColor: getDiffColor(q.difficulty) }} />
-                    <a href={q.url} target="_blank" rel="noopener noreferrer" className={styles.itemLink}>
+                    <a href={q.url?.startsWith('http') ? q.url : '#'} target="_blank" rel="noopener noreferrer" className={styles.itemLink}>
                       {q.title}
                     </a>
                   </li>
@@ -209,3 +208,5 @@ export default function MiniInsights({ stats = {} }) {
     </div>
   );
 }
+
+export default React.memo(MiniInsights);

@@ -308,7 +308,7 @@ function Table({
                         </button>
                       )}
                       <span className={styles.titleText}>{q.title}</span>
-                      <a href={q.url} target="_blank" rel="noreferrer" className={styles.link} title="Open on LeetCode" aria-label={`Open ${q.title} on LeetCode`}>
+                      <a href={q.url?.startsWith('http') ? q.url : '#'} target="_blank" rel="noreferrer" className={styles.link} title="Open on LeetCode" aria-label={`Open ${q.title} on LeetCode`}>
                         <svg className={styles.externalIcon} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                           <polyline points="15 3 21 3 21 9" />
@@ -317,7 +317,7 @@ function Table({
                       </a>
                       {prog.solutionLink && (
                         <a
-                          href={prog.solutionLink}
+                          href={prog.solutionLink?.startsWith('http') ? prog.solutionLink : '#'}
                           target="_blank"
                           rel="noreferrer"
                           className={`${styles.link} ${styles.solutionLink}`}

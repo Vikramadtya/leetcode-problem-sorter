@@ -1,9 +1,10 @@
 'use client';
 
+import { memo } from 'react';
 import dayjs from 'dayjs';
 import styles from './Heatmap.module.css';
 
-export default function Heatmap({ data, settings = {} }) {
+function Heatmap({ data, settings = {} }) {
   // Accept both:
   //   object format: { "2025-06-01": 2, "2025-06-02": 1, ... }  (from API)
   //   array format:  [{ date, count }, ...]                       (legacy)
@@ -108,3 +109,5 @@ export default function Heatmap({ data, settings = {} }) {
     </div>
   );
 }
+
+export default memo(Heatmap);

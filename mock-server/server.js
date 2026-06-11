@@ -287,48 +287,50 @@ function upsertProgress(id, updates) {
 
   let newP = { ...existing };
 
+  // Apply specific status transition rules
   if (updates.status === 'Unsolved') {
-    newP.status = 'Unsolved';
-    newP.dateSolved = null;
-    newP.confidenceLevel = null;
-    newP.nextRevisionDate = null;
-    newP.revise = 0;
-    newP.attempts = 0;
-    newP.timeSpent = 0;
-    newP.notes = '';
-    newP.pattern = '';
-    newP.solutionLink = '';
-    newP.important = 0;
+    Object.assign(newP, {
+      status: 'Unsolved', dateSolved: null, confidenceLevel: null,
+      nextRevisionDate: null, revise: 0, attempts: 0, timeSpent: 0,
+      notes: '', pattern: '', solutionLink: '', important: 0
+    });
     updates.tags = [];
   } else if (updates.status === 'Solved') {
-    newP.dateSolved = existing.dateSolved || new Date().toISOString();
-    newP.confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
-    newP.nextRevisionDate = calcNextRevisionDate(newP.confidenceLevel);
     newP.status = 'Solved';
+    newP.dateSolved = existing.dateSolved || new Date().toISOString();
+    if (updates.confidenceLevel) newP.confidenceLevel = updates.confidenceLevel;
+    else if (!existing.confidenceLevel) newP.confidenceLevel = 3;
+    newP.nextRevisionDate = calcNextRevisionDate(newP.confidenceLevel);
     newP.attempts = updates.attempts !== undefined ? updates.attempts : Math.max(existing.attempts || 0, 1);
   } else if (updates.status === 'Attempted') {
     newP.status = 'Attempted';
     newP.attempts = updates.attempts !== undefined ? updates.attempts : Math.max(existing.attempts || 0, 1);
-  } else if (updates.revise === true) {
-    newP.confidenceLevel = updates.confidenceLevel || existing.confidenceLevel || 3;
-    newP.nextRevisionDate = updates.nextRevisionDate || calcNextRevisionDate(newP.confidenceLevel);
+  }
+
+  // Handle revise toggle explicitly
+  if (updates.revise === true) {
     newP.revise = 1;
+    if (updates.confidenceLevel) newP.confidenceLevel = updates.confidenceLevel;
+    else if (!existing.confidenceLevel) newP.confidenceLevel = 3;
+    newP.nextRevisionDate = updates.nextRevisionDate || calcNextRevisionDate(newP.confidenceLevel);
   } else if (updates.revise === false) {
     newP.revise = 0;
     newP.nextRevisionDate = null;
-  } else if (updates.confidenceLevel !== undefined && existing.revise) {
+  }
+
+  // Handle confidence change without explicit status change
+  if (updates.confidenceLevel !== undefined && updates.status !== 'Unsolved' && existing.revise) {
     newP.confidenceLevel = updates.confidenceLevel;
     newP.nextRevisionDate = calcNextRevisionDate(updates.confidenceLevel);
   }
 
-  // Merge remaining fields
-  if (updates.attempts !== undefined && updates.status !== 'Unsolved') newP.attempts = updates.attempts;
-  if (updates.timeSpent !== undefined) newP.timeSpent = updates.timeSpent;
-  if (updates.notes !== undefined) newP.notes = updates.notes;
-  if (updates.pattern !== undefined && updates.status !== 'Unsolved') newP.pattern = updates.pattern;
-  if (updates.solutionLink !== undefined && updates.status !== 'Unsolved') newP.solutionLink = updates.solutionLink;
-  if (updates.important !== undefined) newP.important = updates.important ? 1 : 0;
-  if (updates.confidenceLevel !== undefined && updates.status !== 'Unsolved') newP.confidenceLevel = updates.confidenceLevel;
+  // Safely merge any other direct updates
+  const fieldsToMerge = ['attempts', 'timeSpent', 'notes', 'pattern', 'solutionLink', 'important', 'confidenceLevel'];
+  for (const field of fieldsToMerge) {
+    if (updates[field] !== undefined && updates.status !== 'Unsolved') {
+      newP[field] = field === 'important' ? (updates[field] ? 1 : 0) : updates[field];
+    }
+  }
 
   db.prepare(`
     INSERT INTO progress (id, status, dateSolved, confidenceLevel, nextRevisionDate, revise, attempts, timeSpent, notes, pattern, solutionLink, important)
