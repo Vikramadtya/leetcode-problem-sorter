@@ -198,7 +198,9 @@ export default function MetadataPage({
                   <>
                     <div className={styles.tagItemHeader}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                        <strong>{item.name}</strong>
+                        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {type === 'tags' && <img src="/icons/tag.svg" alt="Tag" width={16} height={16} />} {item.name}
+                        </strong>
                         {item.description && (
                           <span className={styles.tagItemDesc}>{item.description}</span>
                         )}

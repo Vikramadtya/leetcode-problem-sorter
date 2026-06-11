@@ -400,7 +400,7 @@ function Table({
                         {tagArray.map(t => {
                           const name = typeof t === 'string' ? t : t.name;
                           const key = typeof t === 'string' ? t : t.id;
-                          return <span key={key} className={styles.tagPill}>{name}</span>;
+                          return <span key={key} className={styles.tagPill} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><img src="/icons/tag.svg" alt="Tag" width={12} height={12} style={{ opacity: 0.7 }} /> {name}</span>;
                         })}
                       </div>
                     ) : null}
@@ -477,7 +477,11 @@ function Table({
                 {/* Date Solved */}
                 {!isCompactMode && authEnabled && isVisible('DateSolved') && (
                   <td className={`${styles.td} ${styles.tdCenter} ${styles.dateText}`}>
-                    {prog.dateSolved ? new Date(prog.dateSolved).toLocaleDateString() : '-'}
+                    {prog.dateSolved ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                        <img src="/icons/calendar.svg" alt="Date" width={16} height={16} /> {new Date(prog.dateSolved).toLocaleDateString()}
+                      </span>
+                    ) : '-'}
                   </td>
                 )}
               </tr>

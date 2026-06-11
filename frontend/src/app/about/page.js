@@ -41,16 +41,22 @@ export default function AboutPage() {
           </p>
           
           <h2 className={styles.heading}>Features</h2>
-          <ul className={styles.list}>
-            <li><strong>Cross-Platform Tracking:</strong> Track problems from LeetCode, Codeforces, HackerRank, and more.</li>
-            <li><strong>Pattern Recognition:</strong> Tag problems with specific algorithm patterns to spot your strengths.</li>
-            <li><strong>Spaced Repetition:</strong> Built-in confidence intervals flag problems that are due for revision.</li>
-            <li><strong>Contribution Heatmap:</strong> A beautiful GitHub-style calendar visualizes your daily consistency.</li>
-            <li><strong>Global Comments Hub:</strong> View and manage all your notes across every question in one dedicated dashboard.</li>
-            <li><strong>Favourites Filter:</strong> Instantly filter for problems you've starred as important.</li>
-            <li><strong>Configuration Hub:</strong> Customize tags, platforms, and patterns to fit your personal workflow.</li>
-            <li><strong>Custom Problem Addition:</strong> Manually add any problem that isn't automatically tracked by the system.</li>
-          </ul>
+          <div className={styles.featuresRow}>
+            <ul className={styles.list}>
+              <li><strong>Cross-Platform Tracking:</strong> Track problems from LeetCode, Codeforces, HackerRank, and more.</li>
+              <li><strong>Pattern Recognition:</strong> Tag problems with specific algorithm patterns to spot your strengths.</li>
+              <li><strong>Spaced Repetition:</strong> Built-in confidence intervals flag problems that are due for revision.</li>
+              <li><strong>Contribution Heatmap:</strong> A beautiful GitHub-style calendar visualizes your daily consistency.</li>
+              <li><strong>Global Comments Hub:</strong> View and manage all your notes across every question in one dedicated dashboard.</li>
+              <li><strong>Favourites Filter:</strong> Instantly filter for problems you've starred as important.</li>
+              <li><strong>Configuration Hub:</strong> Customize tags, platforms, and patterns to fit your personal workflow.</li>
+              <li><strong>Custom Problem Addition:</strong> Manually add any problem that isn't automatically tracked by the system.</li>
+            </ul>
+            <div className={styles.avatarContainer}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/avatar.png" alt="Tacker Avatar" className={styles.avatarImage} />
+            </div>
+          </div>
 
           <h2 className={styles.heading}>Contact Me</h2>
           <p className={styles.paragraph}>

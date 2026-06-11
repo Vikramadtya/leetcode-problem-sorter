@@ -146,7 +146,9 @@ export default function CommentsPage() {
                         <span>{group.platformId}</span>
                       )}
                       <span style={{color: 'var(--text-muted)'}}>•</span>
-                      <span>{group.comments.length} comment{group.comments.length > 1 ? 's' : ''}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <img src="/icons/comment.svg" alt="Comment" width={16} height={16} /> {group.comments.length} comment{group.comments.length > 1 ? 's' : ''}
+                      </span>
                       {group.questionUrl && (
                         <>
                           <span style={{color: 'var(--text-muted)'}}>•</span>
@@ -175,7 +177,9 @@ export default function CommentsPage() {
                     {group.comments.map(c => (
                       <div key={c.id} className={styles.commentCard}>
                         <div className={styles.commentHeader}>
-                          <span>{new Date(c.created_at).toLocaleDateString()} at {new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <img src="/icons/calendar.svg" alt="Date" width={16} height={16} /> {new Date(c.created_at).toLocaleDateString()} at {new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
                           <div className={styles.commentActions}>
                             <button className={styles.iconBtn} onClick={() => handleEditStart(c)} title="Edit comment">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
