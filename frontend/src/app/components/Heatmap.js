@@ -46,7 +46,7 @@ export default function Heatmap({ data }) {
   }
 
   const getColor = (count) => {
-    if (count === 0) return 'var(--bg-main)';
+    if (count === 0) return 'var(--bg-hover)';
     if (count === 1) return 'var(--primary-light, #34d399)'; // Light green
     if (count <= 3) return 'var(--primary)'; // Normal green
     return 'var(--primary-dark, #059669)'; // Dark green

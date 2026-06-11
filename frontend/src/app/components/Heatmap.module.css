@@ -40,8 +40,8 @@
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  background-color: var(--bg-main);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-color);
 }
 
 .legend {
@@ -60,7 +60,7 @@
 
 /* ── Static legend colour cells ─────────────────────────────────────────── */
 /* These mirror the getColor() function buckets but as static CSS classes.  */
-.cellL0 { background-color: var(--bg-main); }
+.cellL0 { background-color: var(--bg-hover); border: 1px solid var(--border-color); }
 .cellL1 { background-color: var(--primary-light, #34d399); }
 .cellL2 { background-color: var(--primary); }
 .cellL3 { background-color: var(--primary-dark, #059669); }

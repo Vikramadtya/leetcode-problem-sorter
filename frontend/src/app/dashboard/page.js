@@ -24,6 +24,7 @@ import {
   AreaChart, Area, LineChart, Line
 } from 'recharts';
 import Header from '../components/Header';
+import Heatmap from '../components/Heatmap';
 import { useAppStore } from '../../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import styles from './page.module.css';
