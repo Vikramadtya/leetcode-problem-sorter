@@ -21,7 +21,8 @@ import { useRouter } from 'next/navigation';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area, LineChart, Line
+  AreaChart, Area, LineChart, Line,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import Header from '../components/Header';
 import Heatmap from '../components/Heatmap';
@@ -266,6 +267,22 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Pattern Mastery (Radar) */}
+          <div className={`${styles.chartCard} ${styles.chartCardFull}`}>
+            <h3>Pattern Mastery (Strengths & Weaknesses)</h3>
+            <div className={styles.chartWrapper} style={{ minHeight: '350px' }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={analytics.patternMasteryData || []}>
+                  <PolarGrid stroke="var(--border-color)" />
+                  <PolarAngleAxis dataKey="name" stroke="var(--text-main)" fontSize={12} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="var(--text-muted)" />
+                  <Radar name="Mastery Score" dataKey="score" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.5} />
+                  <Tooltip {...tooltipStyle} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
           {/* Pattern Usage Frequency */}
           <div className={styles.chartCard}>
             <h3>Pattern Usage Frequency</h3>
@@ -316,7 +333,7 @@ export default function Dashboard() {
 
           {/* Average time per difficulty */}
           <div className={styles.chartCard}>
-            <h3>Avg Time per Difficulty</h3>
+            <h3>Time Tracking Analytics (Avg Time per Difficulty)</h3>
             <div className={styles.chartWrapper}>
               <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <BarChart data={analytics.avgTimePerDiff || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
