@@ -24,17 +24,47 @@ export default function EmptyState({
   onAction,
   icon = '⚠️',
 }) {
+  const isError = icon.includes('⚠️') || message.toLowerCase().includes('error');
+
   return (
-    <div className={styles.emptyState} role="status" aria-live="polite">
-      <p className={styles.message}>
-        {icon} {message}
-      </p>
-      {subtext && <p className={styles.subtext}>{subtext}</p>}
-      {actionLabel && onAction && (
-        <button className={styles.actionBtn} onClick={onAction}>
-          {actionLabel}
-        </button>
-      )}
+    <div className={styles.emptyStateContainer} role="status" aria-live="polite">
+      <div className={`${styles.emptyStateCard} ${isError ? styles.errorCard : ''}`}>
+        <div className={`${styles.iconWrapper} ${isError ? styles.errorIcon : ''}`}>
+          {isError ? (
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          ) : (
+            icon
+          )}
+        </div>
+        
+        <h3 className={styles.message}>{message}</h3>
+        
+        {subtext && <p className={styles.subtext}>{subtext}</p>}
+        
+        {actionLabel && onAction && (
+          <div className={styles.buttonGroup}>
+            <button className={styles.actionBtn} onClick={onAction}>
+              {isError && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1 4 1 10 7 10"></polyline>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+              )}
+              {!isError && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="19" y1="12" x2="5" y2="12"></line>
+                  <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+              )}
+              {actionLabel}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

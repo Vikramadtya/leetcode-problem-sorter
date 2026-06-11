@@ -35,6 +35,7 @@ function Table({
   onOpenReflection,
   onOpenInitialSolve,
   onOpenNotes,
+  onOpenComments,
   onOpenAttempt,
   authEnabled,
   patterns = [],
@@ -67,7 +68,8 @@ function Table({
     const raw = e.target.value.trim();
     if (!raw) return;
     const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
-    const combinedTags = Array.from(new Set([...existingTags, ...newTags]));
+    const existingTagNames = existingTags.map(t => typeof t === 'string' ? t : t.name);
+    const combinedTags = Array.from(new Set([...existingTagNames, ...newTags]));
     updateProgress(id, { tags: combinedTags });
     e.target.value = '';
   }, [updateProgress]);
@@ -289,7 +291,7 @@ function Table({
 
                 {/* ID */}
                 {isVisible('ID') && (
-                  <td className={`${styles.td} ${styles.tdLeft} ${styles.idText}`}>{q.id}</td>
+                  <td className={`${styles.td} ${styles.tdLeft} ${styles.idText}`}>{q.platformId || q.id}</td>
                 )}
 
                 {/* Title + Notes + Tags */}
@@ -309,13 +311,18 @@ function Table({
                         </button>
                       )}
                       <span className={styles.titleText}>{q.title}</span>
-                      <a href={q.url?.startsWith('http') ? q.url : '#'} target="_blank" rel="noreferrer" className={styles.link} title="Open on LeetCode" aria-label={`Open ${q.title} on LeetCode`}>
-                        <svg className={styles.externalIcon} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </a>
+                    </div>
+                    <div className={styles.actionRow}>
+                      {q.url && q.url.startsWith('http') && (
+                        <a href={q.url} target="_blank" rel="noreferrer" className={styles.notesBtn} title="Open Question" aria-label={`Open ${q.title}`}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                          Open question
+                        </a>
+                      )}
                       {prog.solutionLink && (
                         <a
                           href={prog.solutionLink?.startsWith('http') ? prog.solutionLink : '#'}
@@ -350,6 +357,19 @@ function Table({
                           {prog.notes ? 'Notes' : 'Add Notes'}
                         </button>
                       )}
+                      {authEnabled && (
+                        <button
+                          className={styles.notesBtn}
+                          onClick={() => onOpenComments && onOpenComments(q)}
+                          aria-label={`View comments for ${q.title}`}
+                          style={{ marginLeft: '4px' }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                          </svg>
+                          {q.commentsCount > 0 && <span style={{ marginLeft: '4px' }}>{q.commentsCount}</span>}
+                        </button>
+                      )}
                     </div>
 
                     {authEnabled && (
@@ -377,9 +397,11 @@ function Table({
 
                     {tagArray.length > 0 ? (
                       <div className={styles.tagList}>
-                        {tagArray.map(t => (
-                          <span key={t} className={styles.tagPill}>{t}</span>
-                        ))}
+                        {tagArray.map(t => {
+                          const name = typeof t === 'string' ? t : t.name;
+                          const key = typeof t === 'string' ? t : t.id;
+                          return <span key={key} className={styles.tagPill}>{name}</span>;
+                        })}
                       </div>
                     ) : null}
                   </td>

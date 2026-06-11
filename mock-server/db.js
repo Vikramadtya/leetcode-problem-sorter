@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 
 const dbPath = path.join(__dirname, 'data', 'tacker.db');
 // Ensure data dir exists
@@ -15,7 +16,9 @@ db.pragma('journal_mode = WAL');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS questions (
-    id TEXT PRIMARY KEY,
+    uuid TEXT PRIMARY KEY,
+    platformId TEXT,
+    platform TEXT,
     title TEXT,
     titleLower TEXT,
     url TEXT,
@@ -23,7 +26,8 @@ db.exec(`
     diffLower TEXT,
     acceptanceRate TEXT,
     frequency REAL,
-    isCustom INTEGER DEFAULT 0
+    isCustom INTEGER DEFAULT 0,
+    UNIQUE(platformId, platform)
   );
 
   CREATE TABLE IF NOT EXISTS question_company_frequencies (
@@ -31,7 +35,7 @@ db.exec(`
     company_slug TEXT,
     time_period TEXT,
     frequency REAL,
-    FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY(question_id) REFERENCES questions(uuid) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS progress (
@@ -47,13 +51,14 @@ db.exec(`
     pattern TEXT,
     solutionLink TEXT,
     important INTEGER DEFAULT 0,
-    FOREIGN KEY(id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY(id) REFERENCES questions(uuid) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS progress_tags (
     progress_id TEXT,
-    tag TEXT,
-    FOREIGN KEY(progress_id) REFERENCES progress(id) ON DELETE CASCADE
+    tag_id TEXT,
+    FOREIGN KEY(progress_id) REFERENCES progress(id) ON DELETE CASCADE,
+    FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS patterns (
@@ -77,6 +82,14 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    question_id TEXT,
+    content TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(question_id) REFERENCES questions(uuid) ON DELETE CASCADE
   );
   
   -- Create indexes for performance
@@ -107,115 +120,19 @@ function seedDatabase() {
 
   console.log('Seeding SQLite database from JSON files...');
 
-  const GLOBAL_DATA_PATH = path.join(__dirname, 'data', 'global_questions.json');
-  const PROGRESS_DATA_PATH = path.join(__dirname, 'data', 'user_progress.json');
-
-  const insertQuestion = db.prepare(`
-    INSERT INTO questions (id, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  
-  const insertCompanyFreq = db.prepare(`
-    INSERT INTO question_company_frequencies (question_id, company_slug, time_period, frequency) VALUES (?, ?, ?, ?)
-  `);
-
-  if (fs.existsSync(GLOBAL_DATA_PATH)) {
-    const rawQuestions = JSON.parse(fs.readFileSync(GLOBAL_DATA_PATH, 'utf8'));
-    
-    db.transaction(() => {
-      Object.values(rawQuestions).forEach(q => {
-        const id = String(q.ID || q.id);
-        const difficulty = (q.Difficulty || q.difficulty || 'Medium');
-        const diffLower = difficulty.toLowerCase();
-        const frequency = parseFloat(q.globalFrequency) || 0;
-        const companies = q.companies || {};
-
-        insertQuestion.run(
-          id,
-          q.Title || q.title || '',
-          (q.Title || q.title || '').toLowerCase(),
-          q['Leetcode Question Link'] || q.URL || q.url || '',
-          difficulty,
-          diffLower,
-          q['Acceptance %'] || q.acceptanceRate || '-',
-          frequency,
-          0 // isCustom
-        );
-
-        for (const [companyName, periods] of Object.entries(companies)) {
-          const c = String(companyName).toLowerCase().trim();
-          for (const [period, freq] of Object.entries(periods)) {
-             insertCompanyFreq.run(id, c, period, parseFloat(freq) || 0);
-          }
-        }
-      });
-    })();
-  }
-
-  const insertProgress = db.prepare(`
-    INSERT INTO progress (id, status, dateSolved, confidenceLevel, nextRevisionDate, revise, attempts, timeSpent, notes, pattern, solutionLink, important)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const insertTag = db.prepare(`
-    INSERT INTO progress_tags (progress_id, tag) VALUES (?, ?)
-  `);
-
-  if (fs.existsSync(PROGRESS_DATA_PATH)) {
-    const rawProgress = JSON.parse(fs.readFileSync(PROGRESS_DATA_PATH, 'utf8'));
-    
-    db.transaction(() => {
-      Object.entries(rawProgress).forEach(([id, p]) => {
-        // Normalise tags
-        let tags = [];
-        if (Array.isArray(p.tags)) tags = p.tags;
-        else if (typeof p.tags === 'string') tags = p.tags.split(',').map(t => t.trim()).filter(Boolean);
-        
-        // Clean legacy Unsolved states
-        const isUnsolved = p.status === 'Unsolved' || !p.status;
-
-        try {
-          insertProgress.run(
-            id,
-            isUnsolved ? 'Unsolved' : p.status,
-            isUnsolved ? null : (p.dateSolved || null),
-            isUnsolved ? null : (p.confidenceLevel || null),
-            isUnsolved ? null : (p.nextRevisionDate || null),
-            isUnsolved ? 0 : (p.revise ? 1 : 0),
-            isUnsolved ? 0 : (p.attempts || 0),
-            isUnsolved ? 0 : (p.timeSpent || 0),
-            p.notes || '',
-            isUnsolved ? '' : (p.pattern || ''),
-            isUnsolved ? '' : (p.solutionLink || ''),
-            p.important ? 1 : 0
-          );
-
-          for (const t of tags) {
-            insertTag.run(id, t);
-          }
-        } catch (e) {
-          // If a progress entry references a non-existent question, foreign key constraint will fail.
-          // We can ignore orphans.
-          console.warn(`Warning: Skipping orphan progress for question ${id}`);
-        }
-      });
-    })();
-  }
-  
-  // Seed basic metadata
   const insertPattern = db.prepare('INSERT INTO patterns (id, name, description) VALUES (?, ?, ?)');
   const patternsData = [
-    { id: 'pat-1',  name: 'Two Pointers',       description: 'Two pointers iterating through data structures.' },
-    { id: 'pat-2',  name: 'Sliding Window',      description: 'Contiguous subarray/substring optimisation.' },
-    { id: 'pat-3',  name: 'Dynamic Programming', description: 'Memoisation and optimal substructure.' },
-    { id: 'pat-4',  name: 'BFS / DFS',           description: 'Graph and tree traversal.' },
-    { id: 'pat-5',  name: 'Binary Search',       description: 'Search in a sorted/monotonic space.' },
-    { id: 'pat-6',  name: 'Backtracking',        description: 'Explore all possibilities and prune.' },
-    { id: 'pat-7',  name: 'Heap / Priority Queue', description: 'Efficient min/max retrieval.' },
-    { id: 'pat-8',  name: 'Greedy',              description: 'Locally optimal choices.' },
-    { id: 'pat-9',  name: 'Union Find',          description: 'Disjoint set / connected components.' },
-    { id: 'pat-10', name: 'Trie',                description: 'Prefix tree for string problems.' },
-    { id: 'pat-11', name: 'Monotonic Stack',     description: 'Next greater/smaller element problems.' },
+    { id: 'pat-1', name: 'Two Pointers', description: 'Using two pointers to iterate through data structures.' },
+    { id: 'pat-2', name: 'Sliding Window', description: 'Maintaining a window that satisfies specific conditions.' },
+    { id: 'pat-3', name: 'DFS', description: 'Depth-first search traversal.' },
+    { id: 'pat-4', name: 'BFS', description: 'Breadth-first search traversal.' },
+    { id: 'pat-5', name: 'Backtracking', description: 'Exploring all potential solutions.' },
+    { id: 'pat-6', name: 'Dynamic Programming', description: 'Solving problems by breaking them down into simpler subproblems.' },
+    { id: 'pat-7', name: 'Greedy', description: 'Making the locally optimal choice at each stage.' },
+    { id: 'pat-8', name: 'Trie', description: 'Prefix tree for efficient string matching.' },
+    { id: 'pat-9', name: 'Union Find', description: 'Disjoint-set data structure.' },
+    { id: 'pat-10', name: 'Topological Sort', description: 'Linear ordering of vertices in a DAG.' },
+    { id: 'pat-11', name: 'Monotonic Stack', description: 'Stack maintaining elements in a specific order.' },
     { id: 'pat-12', name: 'Fast & Slow Pointers', description: 'Cycle detection in linked lists.' },
   ];
   db.transaction(() => {
@@ -247,6 +164,126 @@ function seedDatabase() {
     for (const t of tagsData) insertTagMeta.run(t.id, t.name, t.description);
   })();
 
+  const GLOBAL_DATA_PATH = path.join(__dirname, 'data', 'global_questions.json');
+  const PROGRESS_DATA_PATH = path.join(__dirname, 'data', 'user_progress.json');
+
+  const insertQuestion = db.prepare(`
+    INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  const insertCompanyFreq = db.prepare(`
+    INSERT INTO question_company_frequencies (question_id, company_slug, time_period, frequency) VALUES (?, ?, ?, ?)
+  `);
+
+  if (fs.existsSync(GLOBAL_DATA_PATH)) {
+    const rawQuestions = JSON.parse(fs.readFileSync(GLOBAL_DATA_PATH, 'utf8'));
+    
+    // We need a map from platformId to uuid to link progress properly
+    const legacyIdToUuid = {};
+    
+    db.transaction(() => {
+      Object.values(rawQuestions).forEach(q => {
+        const platformId = String(q.ID || q.id);
+        const uuid = randomUUID();
+        legacyIdToUuid[platformId] = uuid;
+
+        const difficulty = (q.Difficulty || q.difficulty || 'Medium');
+        const diffLower = difficulty.toLowerCase();
+        const frequency = parseFloat(q.globalFrequency) || 0;
+        const companies = q.companies || {};
+
+        insertQuestion.run(
+          uuid,
+          platformId,
+          'LeetCode',
+          q.Title || q.title || '',
+          (q.Title || q.title || '').toLowerCase(),
+          q['Leetcode Question Link'] || q.URL || q.url || '',
+          difficulty,
+          diffLower,
+          q['Acceptance %'] || q.acceptanceRate || '-',
+          frequency,
+          0 // isCustom
+        );
+
+        for (const [companyName, periods] of Object.entries(companies)) {
+          const c = String(companyName).toLowerCase().trim();
+          for (const [period, freq] of Object.entries(periods)) {
+             insertCompanyFreq.run(uuid, c, period, parseFloat(freq) || 0);
+          }
+        }
+      });
+    })();
+  }
+
+  const insertProgress = db.prepare(`
+    INSERT INTO progress (id, status, dateSolved, confidenceLevel, nextRevisionDate, revise, attempts, timeSpent, notes, pattern, solutionLink, important)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertTag = db.prepare(`
+    INSERT INTO progress_tags (progress_id, tag_id) VALUES (?, ?)
+  `);
+
+  if (fs.existsSync(PROGRESS_DATA_PATH)) {
+    const rawProgress = JSON.parse(fs.readFileSync(PROGRESS_DATA_PATH, 'utf8'));
+    
+    db.transaction(() => {
+      Object.entries(rawProgress).forEach(([id, p]) => {
+        // Find the UUID for the legacy platform ID
+        // Because of scoping, legacyIdToUuid needs to be accessed carefully or we can query it
+        const row = db.prepare('SELECT uuid FROM questions WHERE platformId = ?').get(id);
+        if (!row) {
+          console.warn(`Warning: Skipping orphan progress for question ${id}`);
+          return;
+        }
+        const uuid = row.uuid;
+
+        // Normalise tags
+        let tags = [];
+        if (Array.isArray(p.tags)) tags = p.tags;
+        else if (typeof p.tags === 'string') tags = p.tags.split(',').map(t => t.trim()).filter(Boolean);
+        
+        // Clean legacy Unsolved states
+        const isUnsolved = p.status === 'Unsolved' || !p.status;
+
+        try {
+          insertProgress.run(
+            uuid,
+            isUnsolved ? 'Unsolved' : p.status,
+            isUnsolved ? null : (p.dateSolved || null),
+            isUnsolved ? null : (p.confidenceLevel || null),
+            isUnsolved ? null : (p.nextRevisionDate || null),
+            isUnsolved ? 0 : (p.revise ? 1 : 0),
+            isUnsolved ? 0 : (p.attempts || 0),
+            isUnsolved ? 0 : (p.timeSpent || 0),
+            p.notes || '',
+            isUnsolved ? '' : (p.pattern || ''),
+            isUnsolved ? '' : (p.solutionLink || ''),
+            p.important ? 1 : 0
+          );
+
+          for (const t of tags) {
+            let tagId;
+            const existingTag = db.prepare('SELECT id FROM tags WHERE lower(name) = ?').get(t.toLowerCase());
+            if (existingTag) {
+              tagId = existingTag.id;
+            } else {
+              tagId = 'tag-' + randomUUID();
+              db.prepare('INSERT INTO tags (id, name, description) VALUES (?, ?, ?)').run(tagId, t, '');
+            }
+            insertTag.run(uuid, tagId);
+          }
+        } catch (e) {
+          // If a progress entry references a non-existent question, foreign key constraint will fail.
+          // We can ignore orphans.
+          console.warn(`Warning: Skipping orphan progress for question ${id}`);
+        }
+      });
+    })();
+  }
+  
   console.log('Seeding complete.');
 }
 

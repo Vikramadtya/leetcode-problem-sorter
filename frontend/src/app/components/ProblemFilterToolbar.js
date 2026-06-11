@@ -11,6 +11,8 @@ const SORT_OPTIONS = [
   { value: 'title_desc',   label: 'Title Z→A' },
   { value: 'date_newest',  label: 'Newest first' },
   { value: 'date_oldest',  label: 'Oldest first' },
+  { value: 'additionTime_desc', label: 'Recently Added' },
+  { value: 'additionTime_asc',  label: 'Oldest Added' },
   { value: 'difficulty_asc',  label: 'Easy first' },
   { value: 'difficulty_desc', label: 'Hard first' },
 ];
@@ -173,7 +175,11 @@ export default function ProblemFilterToolbar({
               <label className={styles.label} htmlFor="filter-tag">Tag</label>
               <select id="filter-tag" className={styles.select} value={filters.tag ?? ''} onChange={set('tag')}>
                 <option value="">All Tags</option>
-                {tags.map(t => <option key={t} value={t}>{t}</option>)}
+                {tags.map(t => {
+                  const val = typeof t === 'object' ? t.name : t;
+                  const key = typeof t === 'object' ? (t.id || t.name) : t;
+                  return <option key={key} value={val}>{val}</option>;
+                })}
               </select>
             </div>
           )}
@@ -184,7 +190,11 @@ export default function ProblemFilterToolbar({
               <label className={styles.label} htmlFor="filter-pattern">Pattern</label>
               <select id="filter-pattern" className={styles.select} value={filters.pattern ?? ''} onChange={set('pattern')}>
                 <option value="">All Patterns</option>
-                {patterns.map(p => <option key={p} value={p}>{p}</option>)}
+                {patterns.map(p => {
+                  const val = typeof p === 'object' ? p.name : p;
+                  const key = typeof p === 'object' ? (p.id || p.name) : p;
+                  return <option key={key} value={val}>{val}</option>;
+                })}
               </select>
             </div>
           )}
@@ -195,7 +205,11 @@ export default function ProblemFilterToolbar({
               <label className={styles.label} htmlFor="filter-company">Company</label>
               <select id="filter-company" className={styles.select} value={filters.company ?? ''} onChange={set('company')}>
                 <option value="">All Companies</option>
-                {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                {companies.map(c => {
+                  const val = typeof c === 'object' ? c.name : c;
+                  const key = typeof c === 'object' ? (c.id || c.slug || c.name) : c;
+                  return <option key={key} value={val}>{val}</option>;
+                })}
               </select>
             </div>
           )}
@@ -216,7 +230,11 @@ export default function ProblemFilterToolbar({
               <label className={styles.label} htmlFor="filter-platform">Platform</label>
               <select id="filter-platform" className={styles.select} value={filters.platform ?? ''} onChange={set('platform')}>
                 <option value="">All Platforms</option>
-                {platforms.map(p => <option key={p} value={p}>{p}</option>)}
+                {platforms.map(p => {
+                  const val = typeof p === 'object' ? p.name : p;
+                  const key = typeof p === 'object' ? (p.id || p.name) : p;
+                  return <option key={key} value={val}>{val}</option>;
+                })}
               </select>
             </div>
           )}

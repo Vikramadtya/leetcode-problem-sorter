@@ -95,12 +95,22 @@ components:
 
     QuestionWithProgress:
       type: object
-      required: [id, title, difficulty, isCustom, progress]
+      required: [id, platformId, platform, title, difficulty, isCustom, progress]
       properties:
         id:
           type: string
-          description: Unique question identifier (numeric string for LeetCode, prefixed for custom)
+          format: uuid
+          description: Globally unique question identifier (UUID)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        platformId:
+          type: string
+          description: Platform-specific question identifier (e.g., numeric string for LeetCode)
           example: "1"
+          minLength: 1
+        platform:
+          type: string
+          description: Platform name
+          example: "LeetCode"
           minLength: 1
         title:
           type: string
@@ -136,6 +146,10 @@ components:
           type: boolean
           default: false
           description: True if this was added by the user via POST /custom-questions
+        commentsCount:
+          type: integer
+          default: 0
+          description: Number of comments on this question
         progress:
           $ref: '#/components/schemas/ProgressData'
 
@@ -202,9 +216,7 @@ components:
         tags:
           type: array
           items:
-            type: string
-            minLength: 1
-            maxLength: 64
+            $ref: '#/components/schemas/MetadataResponse'
           default: []
           description: >
             User-curated labels. Always an array — never a comma-separated string.
@@ -453,10 +465,11 @@ components:
       type: object
       required: [title]
       properties:
-        id:
+        platformId:
           type: string
           nullable: true
-          description: Optional custom ID. Server generates one if omitted.
+          description: Optional platform-specific ID. Server generates one if omitted.
+
         title:
           type: string
           minLength: 1
@@ -504,6 +517,42 @@ components:
           example: true
         question:
           $ref: '#/components/schemas/QuestionWithProgress'
+    # ----------------------------------------------------------------
+    # Comments
+    # ----------------------------------------------------------------
+    Comment:
+      type: object
+      required: [id, question_id, content, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        question_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 10000
+
+    CommentsResponse:
+      type: object
+      required: [comments]
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
 
     # ----------------------------------------------------------------
     # Analytics
@@ -862,6 +911,7 @@ paths:
           description: Company filter
           schema:
             type: string
+          allowReserved: true
         - name: timePeriod
           in: query
           description: Time period filter (only applies if company is specified). Valid values are 'all', 'thirty-days', 'three-months', 'six-months', 'more-than-six-months'
@@ -889,7 +939,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [Unsolved, Attempted, Solved, all]
+            enum: [Unsolved, Attempted, Solved, Added, all]
             default: all
         - name: starredOnly
           in: query
@@ -922,10 +972,10 @@ paths:
           in: query
           description: >
             Column to sort by. Valid values: id, title, difficulty, frequency,
-            acceptanceRate, dateSolved, attempts, timeSpent, revise.
+            acceptanceRate, dateSolved, attempts, timeSpent, revise, additionTime.
           schema:
             type: string
-            enum: [id, title, difficulty, frequency, acceptanceRate, dateSolved, attempts, timeSpent, revise]
+            enum: [id, title, difficulty, frequency, acceptanceRate, dateSolved, attempts, timeSpent, revise, additionTime]
           allowReserved: true
         - name: sortDirection
           in: query
@@ -1435,6 +1485,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+
+  /questions/{id}/comments:
+    get:
+      operationId: getComments
+      tags: [Questions]
+      summary: Get comments for a question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentsResponse'
+        '404':
+          description: Question not found
+    post:
+      operationId: addComment
+      tags: [Questions]
+      summary: Add a comment to a question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+      responses:
+        '201':
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
 
   /health:
     get:

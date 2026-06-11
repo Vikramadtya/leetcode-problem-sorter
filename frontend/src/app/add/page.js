@@ -69,7 +69,7 @@ export default function AddProblem() {
     }
 
     apiClient.createCustomQuestion({
-      id: form.id || null,
+      platformId: form.id || null,
       title: form.title,
       link: form.link,
       difficulty: form.difficulty,

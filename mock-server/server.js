@@ -70,7 +70,9 @@ function formatQuestion(row) {
   const companies = typeof row.companies === 'string' ? parseJSON(row.companies) : (Array.isArray(row.companies) ? row.companies : []);
   const tags = typeof row.tags === 'string' ? parseJSON(row.tags) : (Array.isArray(row.tags) ? row.tags : []);
   return {
-    id: row.id,
+    id: row.uuid,
+    platformId: row.platformId,
+    platform: row.platform,
     title: row.title,
     url: row.url,
     difficulty: row.difficulty,
@@ -78,6 +80,7 @@ function formatQuestion(row) {
     frequency: row.frequency,
     companies: companies,
     isCustom: !!row.isCustom,
+    commentsCount: row.commentsCount || 0,
     progress: {
       status: row.status || 'Unsolved',
       dateSolved: row.dateSolved || null,
@@ -115,7 +118,7 @@ app.get('/api/v1/questions', (req, res) => {
       
       joinCompanyFreq = `
         INNER JOIN question_company_frequencies qcf 
-        ON q.id = qcf.question_id 
+        ON q.uuid = qcf.question_id 
         AND qcf.company_slug = ? 
         AND qcf.time_period = ?
       `;
@@ -128,10 +131,11 @@ app.get('/api/v1/questions', (req, res) => {
   let selectQuery = `
     SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important,
     ${companyField} as frequency,
-    (SELECT json_group_array(DISTINCT company_slug) FROM question_company_frequencies WHERE question_id = q.id) as companies,
-    (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags
+    (SELECT json_group_array(DISTINCT company_slug) FROM question_company_frequencies WHERE question_id = q.uuid) as companies,
+    (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags,
+    (SELECT COUNT(*) FROM comments c WHERE c.question_id = q.uuid) as commentsCount
     FROM questions q
-    LEFT JOIN progress p ON q.id = p.id
+    LEFT JOIN progress p ON q.uuid = p.id
     ${joinCompanyFreq}
   `;
 
@@ -146,13 +150,15 @@ app.get('/api/v1/questions', (req, res) => {
 
   if (p.search) {
     const s = `%${p.search.toLowerCase()}%`;
-    conditions.push(`(q.titleLower LIKE ? OR q.id LIKE ?)`);
+    conditions.push(`(q.titleLower LIKE ? OR q.platformId LIKE ?)`);
     params.push(s, s);
   }
 
   if (p.status && p.status !== 'all') {
     if (p.status === 'Unsolved') {
       conditions.push(`(p.status IS NULL OR p.status = 'Unsolved')`);
+    } else if (p.status === 'Added') {
+      conditions.push(`q.isCustom = 1`);
     } else {
       conditions.push(`p.status = ?`);
       params.push(p.status);
@@ -160,7 +166,7 @@ app.get('/api/v1/questions', (req, res) => {
   }
 
   if (p.tag) {
-    conditions.push(`p.id IN (SELECT progress_id FROM progress_tags WHERE lower(tag) LIKE ?)`);
+    conditions.push(`p.id IN (SELECT progress_id FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE lower(tg.name) LIKE ?)`);
     params.push(`%${p.tag.toLowerCase()}%`);
   }
 
@@ -183,11 +189,11 @@ app.get('/api/v1/questions', (req, res) => {
 
   let whereClause = conditions.length > 0 ? `WHERE ` + conditions.join(' AND ') : '';
   
-  let orderBy = `ORDER BY CAST(q.id AS INTEGER) ASC`; // default
+  let orderBy = `ORDER BY CAST(q.platformId AS INTEGER) ASC`; // default
   if (p.sortBy) {
     const dir = p.sortDirection === 'desc' ? 'DESC' : 'ASC';
     if (p.sortBy === 'difficulty') orderBy = `ORDER BY CASE q.diffLower WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END ${dir}`;
-    else if (p.sortBy === 'id') orderBy = `ORDER BY CAST(q.id AS INTEGER) ${dir}`;
+    else if (p.sortBy === 'id') orderBy = `ORDER BY CAST(q.platformId AS INTEGER) ${dir}`;
     else if (p.sortBy === 'title') orderBy = `ORDER BY q.titleLower ${dir}`;
     else if (p.sortBy === 'acceptanceRate') orderBy = `ORDER BY q.acceptanceRate ${dir}`;
     else if (p.sortBy === 'frequency') orderBy = `ORDER BY frequency ${dir}`;
@@ -195,11 +201,12 @@ app.get('/api/v1/questions', (req, res) => {
     else if (p.sortBy === 'attempts') orderBy = `ORDER BY p.attempts ${dir}`;
     else if (p.sortBy === 'timeSpent') orderBy = `ORDER BY p.timeSpent ${dir}`;
     else if (p.sortBy === 'dateSolved') orderBy = `ORDER BY p.dateSolved ${dir}`;
+    else if (p.sortBy === 'additionTime') orderBy = `ORDER BY q.rowid ${dir}`;
     else orderBy = `ORDER BY p.${p.sortBy} ${dir}`;
   }
 
   // Execute Count
-  const countQuery = `SELECT COUNT(*) as totalCount FROM questions q LEFT JOIN progress p ON q.id = p.id ${joinCompanyFreq} ${whereClause}`;
+  const countQuery = `SELECT COUNT(*) as totalCount FROM questions q LEFT JOIN progress p ON q.uuid = p.id ${joinCompanyFreq} ${whereClause}`;
   const totalCount = db.prepare(countQuery).get(...params).totalCount;
 
   // Pagination
@@ -221,7 +228,7 @@ app.get('/api/v1/questions', (req, res) => {
 // ============================================================
 app.get('/api/v1/progress/:id', (req, res) => {
   const row = db.prepare(`
-    SELECT p.*, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags
+    SELECT p.*, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags
     FROM progress p WHERE id = ?
   `).get(req.params.id);
 
@@ -240,14 +247,14 @@ app.patch('/api/v1/progress/:id', (req, res) => {
   const id = req.params.id;
   const updates = req.body;
 
-  const qExists = db.prepare('SELECT 1 FROM questions WHERE id = ?').get(id);
+  const qExists = db.prepare('SELECT 1 FROM questions WHERE uuid = ?').get(id);
   if (!qExists) {
     return res.status(404).json({ code: 404, message: `Question ${id} not found`, requestId: req.requestId });
   }
 
   upsertProgress(id, updates);
   
-  const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
+  const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
   updated.tags = parseJSON(updated.tags);
   res.json(formatQuestion(updated).progress);
 });
@@ -268,11 +275,11 @@ app.post('/api/v1/progress/bulk', (req, res) => {
     for (const item of updates) {
       const { id, ...fields } = item;
       if (!id) { skipped++; continue; }
-      const qExists = db.prepare('SELECT 1 FROM questions WHERE id = ?').get(id);
+      const qExists = db.prepare('SELECT 1 FROM questions WHERE uuid = ?').get(id);
       if (!qExists) { skipped++; continue; }
 
       upsertProgress(id, fields);
-      const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
+      const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
       updated.tags = parseJSON(updated.tags);
       results.push({ id, progress: formatQuestion(updated).progress });
     }
@@ -283,7 +290,7 @@ app.post('/api/v1/progress/bulk', (req, res) => {
 
 function upsertProgress(id, updates) {
   let existing = db.prepare(`SELECT * FROM progress WHERE id = ?`).get(id) || { attempts: 0, timeSpent: 0, important: 0, revise: 0, status: 'Unsolved' };
-  let tagsObj = db.prepare(`SELECT tag FROM progress_tags WHERE progress_id = ?`).all(id).map(t => t.tag);
+  let tagsObj = db.prepare(`SELECT tg.name FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = ?`).all(id).map(t => t.name);
 
   let newP = { ...existing };
 
@@ -343,10 +350,27 @@ function upsertProgress(id, updates) {
   `).run(id, newP.status, newP.dateSolved, newP.confidenceLevel, newP.nextRevisionDate, newP.revise, newP.attempts, newP.timeSpent, newP.notes, newP.pattern, newP.solutionLink, newP.important);
 
   if (updates.tags !== undefined) {
-    const newTags = normalizeTags(updates.tags, tagsObj);
+    // If frontend sends an array of objects, extract the names, else use as is
+    const tagNames = updates.tags.map(t => typeof t === 'string' ? t : t.name).filter(Boolean);
+    const newTags = normalizeTags(tagNames, tagsObj);
+    
     db.prepare(`DELETE FROM progress_tags WHERE progress_id = ?`).run(id);
-    const insertTag = db.prepare(`INSERT INTO progress_tags (progress_id, tag) VALUES (?, ?)`);
-    for (const t of newTags) insertTag.run(id, t);
+    const insertTag = db.prepare(`INSERT INTO progress_tags (progress_id, tag_id) VALUES (?, ?)`);
+    const selectTag = db.prepare(`SELECT id FROM tags WHERE lower(name) = ?`);
+    const createTag = db.prepare(`INSERT INTO tags (id, name, description) VALUES (?, ?, ?)`);
+    const { randomUUID } = require('crypto');
+
+    for (const t of newTags) {
+      let tagId;
+      const existing = selectTag.get(t.toLowerCase());
+      if (existing) {
+        tagId = existing.id;
+      } else {
+        tagId = 'tag-' + randomUUID();
+        createTag.run(tagId, t, '');
+      }
+      insertTag.run(id, tagId);
+    }
   }
 }
 
@@ -367,7 +391,7 @@ function computeAnalytics() {
 
   const difficultyRows = db.prepare(`
     SELECT q.difficulty, COUNT(*) as count, SUM(p.timeSpent) as timeSpent
-    FROM progress p JOIN questions q ON p.id = q.id
+    FROM progress p JOIN questions q ON p.id = q.uuid
     WHERE p.status = 'Solved'
     GROUP BY q.difficulty
   `).all();
@@ -461,25 +485,27 @@ function computeAnalytics() {
 
   // Tags Frequency
   const tagsFrequency = db.prepare(`
-    SELECT t.tag as name, COUNT(*) as count
+    SELECT tg.name as name, COUNT(*) as count
     FROM progress_tags t
     JOIN progress p ON t.progress_id = p.id
+    JOIN tags tg ON t.tag_id = tg.id
     WHERE p.status = 'Solved'
-    GROUP BY t.tag
+    GROUP BY tg.name
     ORDER BY count DESC
   `).all();
 
   const problemsByTag = db.prepare(`
-    SELECT tag as name, COUNT(*) as count
-    FROM progress_tags
-    GROUP BY tag
+    SELECT tg.name as name, COUNT(*) as count
+    FROM progress_tags t
+    JOIN tags tg ON t.tag_id = tg.id
+    GROUP BY tg.name
     ORDER BY count DESC
   `).all();
 
   // Confidence vs Difficulty
   const confDiffRows = db.prepare(`
     SELECT q.difficulty, p.confidenceLevel, COUNT(*) as count
-    FROM progress p JOIN questions q ON p.id = q.id
+    FROM progress p JOIN questions q ON p.id = q.uuid
     WHERE p.status = 'Solved' AND p.confidenceLevel IS NOT NULL
     GROUP BY q.difficulty, p.confidenceLevel
   `).all();
@@ -495,7 +521,7 @@ function computeAnalytics() {
   // Time Per Diff Over Time
   const timeDiffRows = db.prepare(`
     SELECT date(p.dateSolved) as dateStr, q.difficulty, AVG(p.timeSpent) as avgTime
-    FROM progress p JOIN questions q ON p.id = q.id
+    FROM progress p JOIN questions q ON p.id = q.uuid
     WHERE p.status = 'Solved' AND p.timeSpent > 0 AND p.dateSolved IS NOT NULL
     GROUP BY dateStr, q.difficulty
     ORDER BY dateStr ASC
@@ -527,8 +553,8 @@ function computeAnalytics() {
   `).all();
 
   const revisionList = db.prepare(`
-    SELECT q.id, q.title, q.difficulty, p.nextRevisionDate
-    FROM progress p JOIN questions q ON p.id = q.id
+    SELECT q.uuid as id, q.title, q.difficulty, p.nextRevisionDate
+    FROM progress p JOIN questions q ON p.id = q.uuid
     WHERE p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))
     ORDER BY p.nextRevisionDate ASC
     LIMIT 20
@@ -536,8 +562,8 @@ function computeAnalytics() {
 
   // MiniInsights: Recent Activity
   const recentActivity = db.prepare(`
-    SELECT q.id, q.title, q.url, q.difficulty, p.dateSolved
-    FROM progress p JOIN questions q ON p.id = q.id
+    SELECT q.uuid as id, q.title, q.url, q.difficulty, p.dateSolved
+    FROM progress p JOIN questions q ON p.id = q.uuid
     WHERE p.status IN ('Solved', 'Attempted')
     ORDER BY p.dateSolved DESC
     LIMIT 3
@@ -545,8 +571,8 @@ function computeAnalytics() {
 
   // MiniInsights: Upcoming Revisions (Top 3)
   const upcomingRevisions = db.prepare(`
-    SELECT q.id, q.title, q.url, q.difficulty, p.nextRevisionDate
-    FROM progress p JOIN questions q ON p.id = q.id
+    SELECT q.uuid as id, q.title, q.url, q.difficulty, p.nextRevisionDate
+    FROM progress p JOIN questions q ON p.id = q.uuid
     WHERE p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))
     ORDER BY p.nextRevisionDate ASC
     LIMIT 3
@@ -654,20 +680,50 @@ app.post('/api/v1/extension/log', (req, res) => {
     return res.status(400).json({ error: 'Missing fields' });
   }
   
+  const uuid = randomUUID();
   const idStr = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  db.prepare(`INSERT INTO questions (id, title, difficulty, link) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`).run(idStr, title, difficulty, link);
   
-  const now = new Date().toISOString();
-  db.prepare(`
-    INSERT INTO progress (id, status, dateSolved, timeSpent) 
-    VALUES (?, 'Solved', ?, ?) 
-    ON CONFLICT(id) DO UPDATE SET 
-      status = 'Solved',
-      dateSolved = COALESCE(progress.dateSolved, excluded.dateSolved),
-      timeSpent = progress.timeSpent + excluded.timeSpent
-  `).run(idStr, now, timeTaken);
+  db.prepare(`INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '-', 0, 1) ON CONFLICT(platformId, platform) DO NOTHING`).run(uuid, idStr, platform, title, title.toLowerCase(), link, difficulty, difficulty.toLowerCase());
+  
+  const row = db.prepare('SELECT uuid FROM questions WHERE platformId = ? AND platform = ?').get(idStr, platform);
+  const qUuid = row ? row.uuid : uuid;
+  
+  upsertProgress(qUuid, { status: 'Solved', timeSpent: timeTaken });
   
   res.json({ message: "Logged" });
+});
+
+// ============================================================
+// COMMENTS ENDPOINTS
+// ============================================================
+app.get('/api/v1/questions/:id/comments', (req, res) => {
+  const id = req.params.id;
+  const qExists = db.prepare('SELECT 1 FROM questions WHERE uuid = ?').get(id);
+  if (!qExists) {
+    return res.status(404).json({ code: 404, message: `Question ${id} not found`, requestId: req.requestId });
+  }
+
+  const comments = db.prepare('SELECT id, question_id, content, created_at FROM comments WHERE question_id = ? ORDER BY created_at ASC').all(id);
+  res.json({ comments });
+});
+
+app.post('/api/v1/questions/:id/comments', (req, res) => {
+  const id = req.params.id;
+  const { content } = req.body;
+  if (!content || !content.trim()) {
+    return res.status(400).json({ code: 400, message: 'Content is required', requestId: req.requestId });
+  }
+
+  const qExists = db.prepare('SELECT 1 FROM questions WHERE uuid = ?').get(id);
+  if (!qExists) {
+    return res.status(404).json({ code: 404, message: `Question ${id} not found`, requestId: req.requestId });
+  }
+
+  const commentId = 'com-' + randomUUID();
+  const createdAt = new Date().toISOString();
+  db.prepare('INSERT INTO comments (id, question_id, content, created_at) VALUES (?, ?, ?, ?)').run(commentId, id, content.trim(), createdAt);
+
+  res.status(201).json({ id: commentId, question_id: id, content: content.trim(), created_at: createdAt });
 });
 
 // ============================================================
@@ -752,14 +808,16 @@ app.get('/api/v1/companies', (req, res) => {
 });
 
 app.post('/api/v1/custom-questions', (req, res) => {
-  const id = req.body.id || 'custom-' + Date.now();
+  const uuid = randomUUID();
+  const platformId = req.body.platformId || req.body.id || 'custom-' + Date.now();
+  const platform = req.body.platform || 'Custom';
   const difficulty = req.body.difficulty || 'Medium';
   const diffLower = difficulty.toLowerCase();
 
   db.prepare(`
-    INSERT INTO questions (id, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
-    VALUES (?, ?, ?, ?, ?, ?, '-', 0, 1)
-  `).run(id, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower);
+    INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '-', 0, 1)
+  `).run(uuid, platformId, platform, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower);
 
   const confidenceLevel = req.body.confidenceLevel || null;
   const isSolved = !!confidenceLevel;
@@ -771,9 +829,9 @@ app.post('/api/v1/custom-questions', (req, res) => {
     tags: normalizeTags(req.body.tags),
     pattern: req.body.pattern || '',
   };
-  upsertProgress(id, progress);
+  upsertProgress(uuid, progress);
 
-  const row = db.prepare(`SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important, (SELECT json_group_array(tag) FROM progress_tags WHERE progress_id = p.id) as tags FROM questions q LEFT JOIN progress p ON q.id = p.id WHERE q.id = ?`).get(id);
+  const row = db.prepare(`SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM questions q LEFT JOIN progress p ON q.uuid = p.id WHERE q.uuid = ?`).get(uuid);
   res.status(201).json({ success: true, question: formatQuestion(row) });
 });
 

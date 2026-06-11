@@ -111,6 +111,43 @@ class ApiClient {
     return query.toString();
   }
 
+  // ── Comments ──────────────────────────────────────────────────────────
+
+  async getComments(questionId) {
+    try {
+      const url = `${API_BASE}/questions/${questionId}/comments`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, { headers });
+      if (res.status === 401) { this._handle401(); return []; }
+      if (!res.ok) throw new Error(await parseError(res));
+      const json = await res.json();
+      return json.comments || [];
+    } catch (error) {
+      console.error('[API] getComments:', error);
+      toast.error('Failed to load comments');
+      throw error;
+    }
+  }
+
+  async addComment(questionId, content) {
+    try {
+      const url = `${API_BASE}/questions/${questionId}/comments`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ content })
+      });
+      if (res.status === 401) { this._handle401(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] addComment:', error);
+      toast.error('Failed to post comment');
+      throw error;
+    }
+  }
+
   // ── Questions ─────────────────────────────────────────────────────────
 
   /**

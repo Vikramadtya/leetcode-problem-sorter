@@ -42,6 +42,8 @@ import MiniInsights          from './MiniInsights';
 import ProblemFilterToolbar  from './ProblemFilterToolbar';
 import TableSkeleton         from './TableSkeleton';
 import EmptyState            from './ui/EmptyState';
+import CommentsPanel         from './CommentsPanel';
+import { apiClient }         from '../../lib/api/apiClient';
 
 import { usePageInit }       from '../../hooks/usePageInit';
 import { useModalHandlers }  from '../../hooks/useModalHandlers';
@@ -53,7 +55,7 @@ import styles from '../page.module.css';
 
 // Tab configuration driven by mode
 const TRACKER_TABS = ['All', 'Solved', 'Attempted'];
-const EXPLORE_TABS = ['All', 'Solved', 'Attempted', 'Unsolved'];
+const EXPLORE_TABS = ['All', 'Solved', 'Attempted', 'Unsolved', 'Added'];
 
 export default function TrackerPageShell({
   mode,
@@ -98,6 +100,7 @@ export default function TrackerPageShell({
 
   // ── Local modal state ──────────────────────────────────────────────────────
   const [activeNotesQ,        setActiveNotesQ]        = useState(null);
+  const [activeCommentQ,      setActiveCommentQ]      = useState(null);
   const [activeReflectionQ,   setActiveReflectionQ]   = useState(null);
   const [activeInitialSolveQ, setActiveInitialSolveQ] = useState(null);
   const [activeAttemptQ,      setActiveAttemptQ]      = useState(null);
@@ -196,9 +199,18 @@ export default function TrackerPageShell({
     return idx >= 0 ? idx : 0;
   }, [filters.status, tabValues]);
 
+  const setFilters = useAppStore(state => state.setFilters);
+
   const handleTabChange = useCallback(
-    (idx) => setFilter('status', tabValues[idx] ?? 'all'),
-    [setFilter, tabValues],
+    (idx) => {
+      const newStatus = tabValues[idx] ?? 'all';
+      if (newStatus.toLowerCase() === 'added') {
+        setFilters({ status: newStatus, sortBy: 'additionTime', sortDirection: 'desc' });
+      } else {
+        setFilter('status', newStatus);
+      }
+    },
+    [setFilter, setFilters, tabValues]
   );
 
   // ── Flashcard mode (Tracker only) ─────────────────────────────────────────
@@ -343,6 +355,7 @@ export default function TrackerPageShell({
             onOpenReflection={setActiveReflectionQ}
             onOpenInitialSolve={setActiveInitialSolveQ}
             onOpenNotes={setActiveNotesQ}
+            onOpenComments={setActiveCommentQ}
             onOpenAttempt={setActiveAttemptQ}
             authEnabled={authEnabled}
             patterns={patterns}
@@ -374,6 +387,13 @@ export default function TrackerPageShell({
           question={activeNotesQ}
           onClose={() => setActiveNotesQ(null)}
           onSave={handleSaveNotes}
+        />
+      )}
+      {activeCommentQ && (
+        <CommentsPanel
+          question={activeCommentQ}
+          apiClient={apiClient}
+          onClose={() => setActiveCommentQ(null)}
         />
       )}
       {activeReflectionQ && (
