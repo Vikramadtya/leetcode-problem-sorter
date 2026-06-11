@@ -17,6 +17,11 @@ export default function AddProblem() {
 
   const [utilities, setUtilities] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showPlatformModal, setShowPlatformModal] = useState(false);
+  const [newPlatformName, setNewPlatformName] = useState('');
+  const [newPlatformDesc, setNewPlatformDesc] = useState('');
+  const [isSubmittingPlatform, setIsSubmittingPlatform] = useState(false);
+  const [customTag, setCustomTag] = useState('');
   
   const [form, setForm] = useState({
     id: '',
@@ -139,11 +144,18 @@ export default function AddProblem() {
             </div>
             <div className={styles.formGroup}>
               <label className={styles.label}>Platform</label>
-              <select className={styles.select} value={form.platform} onChange={e => setForm({...form, platform: e.target.value})}>
+              <select className={styles.select} value={form.platform} onChange={e => {
+                if (e.target.value === '___NEW___') {
+                  setShowPlatformModal(true);
+                } else {
+                  setForm({...form, platform: e.target.value});
+                }
+              }}>
                 {utilities.platforms.length === 0 && <option value="Custom">Custom</option>}
                 {utilities.platforms.map(p => (
                   <option key={p.id} value={p.name}>{p.name}</option>
                 ))}
+                <option value="___NEW___">+ Add New Platform</option>
               </select>
             </div>
           </div>
@@ -176,22 +188,52 @@ export default function AddProblem() {
 
           <div className={styles.formGroup}>
             <label className={styles.label}>Tags</label>
-            {utilities.tags.length === 0 ? (
-              <p className={styles.emptyHint}>No tags defined. Add them in the Tags page.</p>
+            {utilities.tags.length === 0 && form.tags.length === 0 ? (
+              <p className={styles.emptyHint}>No tags defined. Type below to add custom tags.</p>
             ) : (
               <div className={styles.tagGrid}>
-                {utilities.tags.map(t => (
+                {Array.from(new Set([...utilities.tags.map(t => t.name), ...form.tags])).map(tagName => (
                   <button
-                    key={t.id}
+                    key={tagName}
                     type="button"
-                    onClick={() => toggleTag(t.name)}
-                    className={`${styles.tagBtn} ${form.tags.includes(t.name) ? styles.tagActive : ''}`}
+                    onClick={() => toggleTag(tagName)}
+                    className={`${styles.tagBtn} ${form.tags.includes(tagName) ? styles.tagActive : ''}`}
                   >
-                    {t.name}
+                    {tagName}
                   </button>
                 ))}
               </div>
             )}
+            <div style={{marginTop: '10px', display: 'flex', gap: '8px'}}>
+              <input 
+                type="text" 
+                className={styles.input} 
+                placeholder="Type a custom tag and press Enter" 
+                value={customTag}
+                onChange={e => setCustomTag(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (customTag.trim()) {
+                      const newTag = customTag.trim();
+                      if (!form.tags.includes(newTag)) {
+                        setForm(prev => ({ ...prev, tags: [...prev.tags, newTag] }));
+                      }
+                      setCustomTag('');
+                    }
+                  }
+                }}
+              />
+              <button type="button" onClick={() => {
+                if (customTag.trim()) {
+                  const newTag = customTag.trim();
+                  if (!form.tags.includes(newTag)) {
+                    setForm(prev => ({ ...prev, tags: [...prev.tags, newTag] }));
+                  }
+                  setCustomTag('');
+                }
+              }} className={styles.submitBtn} style={{padding: '0 16px', minWidth: '80px'}}>Add</button>
+            </div>
           </div>
 
           <div className={styles.actions}>
@@ -199,6 +241,71 @@ export default function AddProblem() {
             <button type="submit" className={styles.submitBtn}>Add Problem</button>
           </div>
         </form>
+
+        {showPlatformModal && (
+          <div className={styles.modalOverlay} onClick={() => setShowPlatformModal(false)}>
+            <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+              <h3 style={{marginBottom: '16px', color: 'var(--text-main)'}}>Add New Platform</h3>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Name</label>
+                <input 
+                  type="text" 
+                  className={styles.input} 
+                  value={newPlatformName} 
+                  onChange={e => setNewPlatformName(e.target.value)} 
+                  placeholder="e.g. Codeforces" 
+                  autoFocus 
+                />
+              </div>
+              <div className={styles.formGroup} style={{marginTop: '12px'}}>
+                <label className={styles.label}>Description (Optional)</label>
+                <textarea 
+                  className={styles.textarea} 
+                  value={newPlatformDesc} 
+                  onChange={e => setNewPlatformDesc(e.target.value)} 
+                  placeholder="Competitive programming platform..." 
+                  rows={3} 
+                />
+              </div>
+              <div className={styles.actions} style={{marginTop: '20px'}}>
+                <button type="button" className={styles.cancelBtn} onClick={() => {
+                  setShowPlatformModal(false);
+                  setNewPlatformName('');
+                  setNewPlatformDesc('');
+                  setForm(prev => ({...prev, platform: utilities.platforms[0]?.name || ''}));
+                }}>Cancel</button>
+                <button type="button" className={styles.submitBtn} disabled={!newPlatformName.trim() || isSubmittingPlatform} onClick={async () => {
+                  if (!newPlatformName.trim()) return;
+                  setIsSubmittingPlatform(true);
+                  try {
+                    const res = await apiClient.createMetadata('platforms', {
+                      name: newPlatformName.trim(),
+                      description: newPlatformDesc.trim()
+                    });
+                    if (res && res.name) {
+                      setUtilities(prev => ({
+                        ...prev,
+                        platforms: [...prev.platforms, res]
+                      }));
+                      setForm(prev => ({...prev, platform: res.name}));
+                      setShowPlatformModal(false);
+                      setNewPlatformName('');
+                      setNewPlatformDesc('');
+                      toast.success(`Platform ${res.name} added!`);
+                    }
+                  } catch (err) {
+                    toast.error('Failed to add platform');
+                  } finally {
+                    setIsSubmittingPlatform(false);
+                  }
+                }}>
+                  {isSubmittingPlatform ? 'Adding...' : 'Add Platform'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

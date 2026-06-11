@@ -67,8 +67,8 @@ function parseJSON(str) {
 }
 
 function formatQuestion(row) {
-  const companies = parseJSON(row.companies);
-  const tags = parseJSON(row.tags);
+  const companies = typeof row.companies === 'string' ? parseJSON(row.companies) : (Array.isArray(row.companies) ? row.companies : []);
+  const tags = typeof row.tags === 'string' ? parseJSON(row.tags) : (Array.isArray(row.tags) ? row.tags : []);
   return {
     id: row.id,
     title: row.title,

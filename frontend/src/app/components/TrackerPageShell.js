@@ -211,6 +211,7 @@ export default function TrackerPageShell({
   // ── Derived: only show analytics section when there is activity ───────────
   const hasActivity =
     stats.solved > 0 ||
+    stats.attempted > 0 ||
     (stats.activityTimeline && Object.keys(stats.activityTimeline).length > 0);
 
   // ── Reset action for error state ──────────────────────────────────────────
@@ -405,7 +406,7 @@ export default function TrackerPageShell({
       )}
 
       {/* ── Floating Goal Widget ────────────────────────────────────────────── */}
-      {authEnabled && hasActivity && (
+      {authEnabled && (
         <FloatingGoalWidget />
       )}
     </div>

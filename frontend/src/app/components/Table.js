@@ -62,12 +62,13 @@ function Table({
     setFilters({ sortBy: key, sortDirection: direction });
   }, [filters.sortBy, filters.sortDirection, setFilters]);
 
-  const handleTagInput = useCallback((e, id) => {
+  const handleTagInput = useCallback((e, id, existingTags = []) => {
     if (e.key !== 'Enter') return;
     const raw = e.target.value.trim();
     if (!raw) return;
-    const tagArray = raw.split(',').map(t => t.trim()).filter(Boolean);
-    updateProgress(id, { tags: tagArray });
+    const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
+    const combinedTags = Array.from(new Set([...existingTags, ...newTags]));
+    updateProgress(id, { tags: combinedTags });
     e.target.value = '';
   }, [updateProgress]);
 
@@ -357,7 +358,7 @@ function Table({
                           type="text"
                           className={styles.tagInput}
                           placeholder="+ add tags (comma sep)"
-                          onKeyDown={(e) => handleTagInput(e, q.id)}
+                          onKeyDown={(e) => handleTagInput(e, q.id, tagArray)}
                           aria-label="Add tags (comma separated, press Enter)"
                         />
                         <select
