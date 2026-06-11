@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 
 /**
  * useFilterHandlers — Returns stable filter callbacks plus derived filter
@@ -13,7 +14,15 @@ import { useAppStore } from '../store/useAppStore';
  *  2. Derived tag / pattern / platform option lists built from the question list
  */
 export function useFilterHandlers() {
-  const { questions, patterns, filters, setFilter, setFilters } = useAppStore();
+  const { questions, patterns, filters, setFilter, setFilters } = useAppStore(
+    useShallow((state) => ({
+      questions: state.questions,
+      patterns: state.patterns,
+      filters: state.filters,
+      setFilter: state.setFilter,
+      setFilters: state.setFilters,
+    }))
+  );
 
   // ── Individual filter change ─────────────────────────────────────────────
   /**
@@ -77,11 +86,10 @@ export function useFilterHandlers() {
     return [...s].sort();
   }, [questions]);
 
-  /** All company names from the store's companies array */
+  const companies = useAppStore(state => state.companies) || [];
   const allCompanyNames = useMemo(
-    () => (useAppStore.getState().companies || []).map((c) => c.name),
-    // Using store state directly since it's populated on init
-    [useAppStore.getState().companies]
+    () => companies.map((c) => c.name),
+    [companies]
   );
 
   /** Pattern name strings derived from the store's UtilityItem[] array */

@@ -51,6 +51,9 @@ export const useAppStore = create((set, get) => {
       solved: 0,
       attempted: 0,
       dueRevision: 0,
+      favourite: 0,
+      totalQuestions: 0,
+      completionPercent: "0.0",
       easy: 0,
       medium: 0,
       hard: 0,
@@ -152,6 +155,9 @@ export const useAppStore = create((set, get) => {
             solved: data.totalSolved || 0,
             attempted: data.totalAttempted || 0,
             dueRevision: data.totalRevise || 0,
+            favourite: data.totalFavourite || 0,
+            totalQuestions: data.totalQuestions || 0,
+            completionPercent: data.completionPercent || "0.0",
             easy: data.difficultyBreakdown?.Easy || 0,
             medium: data.difficultyBreakdown?.Medium || 0,
             hard: data.difficultyBreakdown?.Hard || 0,
@@ -185,6 +191,9 @@ export const useAppStore = create((set, get) => {
             solved:    data.totalSolved    || 0,
             attempted: data.totalAttempted || 0,
             dueRevision: data.totalRevise  || 0,
+            favourite: data.totalFavourite || 0,
+            totalQuestions: data.totalQuestions || 0,
+            completionPercent: data.completionPercent || "0.0",
             easy:   data.difficultyBreakdown?.Easy   || 0,
             medium: data.difficultyBreakdown?.Medium || 0,
             hard:   data.difficultyBreakdown?.Hard   || 0,
@@ -281,10 +290,8 @@ export const useAppStore = create((set, get) => {
           await get().fetchQuestions();
         }
 
-        // 5. Refresh lightweight stats (streak, heatmap) after every solve/revise
-        if (updates.status === 'Solved' || updates.revise === true) {
-          get().fetchLightStats();
-        }
+        // 5. Refresh lightweight stats (streak, heatmap) after any update
+        get().fetchLightStats();
 
       } catch (error) {
         log.error('updateProgress failed:', error);

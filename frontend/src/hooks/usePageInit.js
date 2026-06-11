@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 
 /**
  * usePageInit — Initialises a page in the correct data-fetch mode and wires
@@ -16,8 +17,14 @@ import { useAppStore } from '../store/useAppStore';
  *                                   close any open modals).
  */
 export function usePageInit(mode, { onEscape } = {}) {
-  const { resetToTrackerMode, resetToExploreMode, fetchUtilities, fetchLightStats } =
-    useAppStore();
+  const { resetToTrackerMode, resetToExploreMode, fetchUtilities, fetchLightStats } = useAppStore(
+    useShallow((state) => ({
+      resetToTrackerMode: state.resetToTrackerMode,
+      resetToExploreMode: state.resetToExploreMode,
+      fetchUtilities: state.fetchUtilities,
+      fetchLightStats: state.fetchLightStats,
+    }))
+  );
 
   // ── One-time initialisation ────────────────────────────────────────────
   // useRef guard prevents StrictMode double-invoke from firing the fetch twice.

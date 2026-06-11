@@ -3,16 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/fetch-data.js",
     "dev": "next dev",
-    "prebuild": "node scripts/fetch-data.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "csv-parse": "^6.2.1",
     "dayjs": "^1.11.21",
     "motion": "^12.40.0",
     "next": "16.2.7",

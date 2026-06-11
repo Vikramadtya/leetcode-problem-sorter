@@ -40,7 +40,6 @@ export default function AddProblem() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // S-3 FIX: show error instead of silently doing nothing
     if (!session) {
       toast.error('You must be signed in to add a problem.');
       return;
@@ -55,7 +54,6 @@ export default function AddProblem() {
       pattern: form.pattern,
       confidenceLevel: form.confidenceLevel ? parseInt(form.confidenceLevel, 10) : null,
       timeTaken: form.timeTaken ? parseInt(form.timeTaken, 10) : null,
-      // B-4 FIX: form.tags is already an array — do not join
       tags: form.tags,
     })
     .then(data => {

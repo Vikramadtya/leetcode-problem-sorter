@@ -6,7 +6,6 @@ import styles from './ReflectionModal.module.css'; // Reuse styles
 export default function InitialSolveModal({ question, patterns = [], onClose, onSave }) {
   const [solutionLink, setSolutionLink] = useState('');
   const [notes, setNotes] = useState('');
-  // B-6 FIX: pattern is on progress, not the question root
   const [pattern, setPattern] = useState(question.progress?.pattern || '');
   const [memoryStrength, setMemoryStrength] = useState(3);
 

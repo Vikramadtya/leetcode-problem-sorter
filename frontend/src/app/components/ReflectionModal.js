@@ -5,7 +5,6 @@ import styles from './ReflectionModal.module.css';
 
 export default function ReflectionModal({ question, patterns = [], onClose, onSave }) {
   const [insight, setInsight] = useState('');
-  // B-5 FIX: pattern is on progress, not the question root
   const [pattern, setPattern] = useState(question.progress?.pattern || '');
   const [memoryStrength, setMemoryStrength] = useState(3);
 

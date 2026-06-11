@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import styles from './Table.module.css';
 import { useAppStore } from '../../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 
 // ─── Utilities ────────────────────────────────────────────────────────────
 
@@ -79,7 +80,14 @@ function Table({
   isCompactMode = false,
   visibleColumns = ['STATUS', 'REVISE', 'ID', 'Title', 'Difficulty', 'Companies', 'Attempts', 'Time', 'Acceptance %', 'Frequency %', 'DateSolved'],
 }) {
-  const { questions, filters, setFilters, updateProgress } = useAppStore();
+  const { questions, filters, setFilters, updateProgress } = useAppStore(
+    useShallow((state) => ({
+      questions: state.questions,
+      filters: state.filters,
+      setFilters: state.setFilters,
+      updateProgress: state.updateProgress,
+    }))
+  );
   const { startTimer, stopTimer, getElapsed, isRunning } = useTimers();
 
   const isVisible = useCallback((col) => visibleColumns.includes(col), [visibleColumns]);
@@ -94,7 +102,6 @@ function Table({
     setFilters({ sortBy: key, sortDirection: direction });
   }, [filters.sortBy, filters.sortDirection, setFilters]);
 
-  // B-3 FIX: Parse comma-separated input into an array before sending
   const handleTagInput = useCallback((e, id) => {
     if (e.key !== 'Enter') return;
     const raw = e.target.value.trim();
@@ -173,21 +180,16 @@ function Table({
             const isSolved = prog.status === 'Solved';
             const isAttempted = prog.status === 'Attempted' || prog.status === 'Solved';
 
-            // B-8 FIX: Overdue means past due date — independent of revise flag
             const isRevise = !!prog.revise;
-            const isRevisionOverdue = prog.nextRevisionDate
-              ? new Date(prog.nextRevisionDate) <= new Date()
-              : false;
+            const isRevisionOverdue = !!prog.isDueForRevision;
 
             const rowClass = isSolved ? styles.rowSolved : (isAttempted ? styles.attemptedRow : styles.row);
             const attempts = prog.attempts || 0;
 
-            // B-11 FIX: Timer lives in ref-based hook, survives re-renders
             const timerRunning = isRunning(q.id);
             const sessionSeconds = getElapsed(q.id);
             const totalTime = (prog.timeSpent || 0) + sessionSeconds;
 
-            // B-2 FIX: tags is always an array from the server
             const tagArray = Array.isArray(prog.tags) ? prog.tags : [];
 
             return (
@@ -220,11 +222,9 @@ function Table({
                           className={`${styles.checkboxBtn} ${isSolved ? styles.checked : ''}`}
                           onClick={() => {
                             if (isSolved) {
-                              // S-4 FIX: server computes dateSolved — never set it here
                               updateProgress(q.id, { status: 'Unsolved' });
                             } else {
                               if (onOpenInitialSolve) onOpenInitialSolve(q);
-                              // S-4 FIX: removed the dateSolved fallback that bypassed server
                             }
                           }}
                           title={isSolved ? 'Unmark Solved (clears all data)' : 'Mark Solved'}
@@ -393,14 +393,13 @@ function Table({
                       </div>
                     )}
 
-                    {/* B-2 FIX: tags is always an array — no string split */}
-                    {tagArray.length > 0 && (
+                    {tagArray.length > 0 ? (
                       <div className={styles.tagList}>
                         {tagArray.map(t => (
                           <span key={t} className={styles.tagPill}>{t}</span>
                         ))}
                       </div>
-                    )}
+                    ) : null}
                   </td>
                 )}
 
@@ -454,7 +453,7 @@ function Table({
                   </td>
                 )}
 
-                {/* Timer — B-11 FIX: uses ref-based timer hook */}
+                {/* Timer */}
                 {!isCompactMode && authEnabled && isVisible('Time') && (
                   <td className={`${styles.td} ${styles.tdCenter}`}>
                     <div className={styles.timeTracker}>

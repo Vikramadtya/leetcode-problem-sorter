@@ -179,6 +179,9 @@ components:
           type: boolean
           default: false
           description: Whether the user has actively flagged this for SRS revision.
+        isDueForRevision:
+          type: boolean
+          description: Computed field. True if revise=true OR nextRevisionDate is in the past.
         attempts:
           type: integer
           minimum: 0
@@ -573,6 +576,10 @@ components:
           minimum: 0
           description: Number of problems solved in the last 7 days.
           example: 5
+        completionPercent:
+          type: string
+          description: Computed completion percentage of all questions.
+          example: "12.5"
         activityTimeline:
           type: object
           nullable: true

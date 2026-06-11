@@ -43,6 +43,7 @@ import { usePageInit }       from '../../hooks/usePageInit';
 import { useModalHandlers }  from '../../hooks/useModalHandlers';
 import { useFilterHandlers } from '../../hooks/useFilterHandlers';
 import { useAppStore }       from '../../store/useAppStore';
+import { useShallow }        from 'zustand/react/shallow';
 
 import styles from '../page.module.css';
 
@@ -59,7 +60,6 @@ export default function TrackerPageShell({
   showStreaks = false,
   authEnabled,
 }) {
-  // ── Store ──────────────────────────────────────────────────────────────────
   const {
     questions,
     isLoading,
@@ -73,7 +73,22 @@ export default function TrackerPageShell({
     resetToExploreMode,
     openFlashcards,
     updateProgress,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((state) => ({
+      questions: state.questions,
+      isLoading: state.isLoading,
+      error: state.error,
+      filters: state.filters,
+      setFilter: state.setFilter,
+      patterns: state.patterns,
+      stats: state.stats,
+      fetchLightStats: state.fetchLightStats,
+      resetToTrackerMode: state.resetToTrackerMode,
+      resetToExploreMode: state.resetToExploreMode,
+      openFlashcards: state.openFlashcards,
+      updateProgress: state.updateProgress,
+    }))
+  );
 
   // ── Local modal state ──────────────────────────────────────────────────────
   const [activeNotesQ,        setActiveNotesQ]        = useState(null);

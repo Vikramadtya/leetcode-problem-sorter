@@ -21,7 +21,9 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     const ms = Date.now() - start;
     const level = res.statusCode >= 500 ? 'ERROR' : res.statusCode >= 400 ? 'WARN' : 'INFO';
-    console.log(`[${level}] ${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} ${ms}ms reqId=${req.requestId}`);
+    const qs = Object.keys(req.query || {}).length ? ` ?${new URLSearchParams(req.query).toString()}` : '';
+    const bodyStr = Object.keys(req.body || {}).length ? ` body=${JSON.stringify(req.body)}` : '';
+    console.log(`[${level}] ${new Date().toISOString()} ${req.method} ${req.path}${qs} ${res.statusCode} ${ms}ms reqId=${req.requestId}${bodyStr}`);
   });
   next();
 });
@@ -83,6 +85,7 @@ function formatQuestion(row) {
       pattern: row.pattern || '',
       solutionLink: row.solutionLink || '',
       important: !!row.important,
+      isDueForRevision: !!row.revise || (row.nextRevisionDate ? new Date(row.nextRevisionDate) <= new Date() : false),
     }
   };
 }
@@ -552,6 +555,7 @@ function computeAnalytics() {
     patternsMostRevised,
     confidenceToProblemCount,
     revisionList,
+    completionPercent: baseStats.totalQuestions > 0 ? ((baseStats.totalSolved / baseStats.totalQuestions) * 100).toFixed(1) : "0.0",
   };
 }
 
@@ -568,6 +572,7 @@ app.get('/api/v1/stats', (req, res) => {
     weeklyCount: c.weeklyCount,
     activityTimeline: c.activityTimeline,
     difficultyBreakdown: c.difficultyBreakdown,
+    completionPercent: c.completionPercent,
   });
 });
 

@@ -50,7 +50,7 @@ export default function LandingCharts() {
       {/* Tags Frequency — bar chart */}
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Tags Frequency</h3>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
           <BarChart data={tagsData}>
             <XAxis dataKey="tag" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
@@ -63,7 +63,7 @@ export default function LandingCharts() {
       {/* Problems by Pattern — pie chart */}
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Problems by Pattern</h3>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
           <PieChart>
             <Pie data={patternsData} dataKey="value" nameKey="pattern" cx="50%" cy="50%" outerRadius={75} label>
               {patternsData.map((_, i) => (
@@ -78,7 +78,7 @@ export default function LandingCharts() {
       {/* Problems Solved Over Time — line chart */}
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Problems Solved Over Time</h3>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
           <LineChart data={problemsOverTime}>
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 12 }} />

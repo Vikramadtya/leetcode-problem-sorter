@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 
 /**
  * useModalHandlers — Returns stable callbacks for the three progress modals
@@ -20,7 +21,12 @@ export function useModalHandlers({
   setActiveReflectionQ,
   setActiveNotesQ,
 }) {
-  const { questions, updateProgress } = useAppStore();
+  const { questions, updateProgress } = useAppStore(
+    useShallow((state) => ({
+      questions: state.questions,
+      updateProgress: state.updateProgress,
+    }))
+  );
 
   /**
    * handleSaveInitialSolve — called when the user submits the first-time solve modal.

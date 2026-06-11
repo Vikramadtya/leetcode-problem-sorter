@@ -19,14 +19,59 @@ async function parseError(res) {
 
 /** Wrap fetch with a timeout using AbortController */
 async function fetchWithTimeout(url, options = {}, ms = TIMEOUT_MS) {
+  // If the caller already provided an AbortSignal, we must respect it,
+  // but we also want to add our own timeout. We can abort our controller
+  // if either the timeout hits or the parent signal aborts.
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
+  
+  const onParentAbort = () => controller.abort();
+  if (options.signal) {
+    options.signal.addEventListener('abort', onParentAbort);
+  }
+
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(id);
+    if (options.signal) {
+      options.signal.removeEventListener('abort', onParentAbort);
+    }
   }
 }
+
+/** 
+ * fetchWithRetry wraps fetchWithTimeout with automatic exponential backoff.
+ * It will retry 50x errors or network failures up to maxRetries.
+ */
+async function fetchWithRetry(url, options = {}, maxRetries = 2) {
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    try {
+      const res = await fetchWithTimeout(url, options);
+      // If it's a 50x error, throw to trigger retry
+      if (res.status >= 500) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      return res; // 2xx, 3xx, 4xx are returned directly (4xx are usually client errors, no point retrying)
+    } catch (error) {
+      // Don't retry if it was intentionally aborted by the user/system
+      if (error.name === 'AbortError' && options.signal?.aborted) {
+        throw error;
+      }
+      
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+      
+      attempt++;
+      // Exponential backoff: 500ms, 1000ms...
+      const delay = Math.pow(2, attempt - 1) * 500;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
 
 // ─── ApiClient class ───────────────────────────────────────────────────────
 
@@ -83,7 +128,7 @@ class ApiClient {
       const qs = this.buildQueryString(params);
       const url = `${API_BASE}/questions${qs ? '?' + qs : ''}`;
       const headers = await this.getHeaders();
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         headers,
         signal: this._questionsFetchController.signal,
       });
@@ -170,13 +215,14 @@ class ApiClient {
    */
   async getStats() {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/stats`, {
+      const res = await fetchWithRetry(`${API_BASE}/stats`, {
         headers: await this.getHeaders(),
       });
       if (!res.ok) throw new Error(await parseError(res));
       return await res.json();
     } catch (error) {
       console.error('[API] getStats:', error.message);
+      toast.error(`Failed to load stats: ${error.message}`);
       throw error;
     }
   }
@@ -187,13 +233,14 @@ class ApiClient {
    */
   async getAnalytics() {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/analytics`, {
+      const res = await fetchWithRetry(`${API_BASE}/analytics`, {
         headers: await this.getHeaders(),
       });
       if (!res.ok) throw new Error(await parseError(res));
       return await res.json();
     } catch (error) {
       console.error('[API] getAnalytics:', error.message);
+      toast.error(`Failed to load analytics: ${error.message}`);
       throw error;
     }
   }
@@ -202,26 +249,28 @@ class ApiClient {
 
   async getUtilities() {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/utilities`, {
+      const res = await fetchWithRetry(`${API_BASE}/utilities`, {
         headers: await this.getHeaders(),
       });
       if (!res.ok) throw new Error(await parseError(res));
       return await res.json();
     } catch (error) {
       console.error('[API] getUtilities:', error.message);
+      toast.error(`Failed to load utilities: ${error.message}`);
       return { difficulties: [], platforms: [], patterns: [], tags: [] };
     }
   }
 
   async getCompanies() {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/companies`, {
+      const res = await fetchWithRetry(`${API_BASE}/companies`, {
         headers: await this.getHeaders(),
       });
       if (!res.ok) throw new Error(await parseError(res));
       return await res.json();
     } catch (error) {
       console.error('[API] getCompanies:', error.message);
+      toast.error(`Failed to load companies: ${error.message}`);
       return [];
     }
   }

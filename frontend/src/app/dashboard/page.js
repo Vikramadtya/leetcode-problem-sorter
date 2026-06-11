@@ -24,8 +24,8 @@ import {
   AreaChart, Area, LineChart, Line
 } from 'recharts';
 import Header from '../components/Header';
-import Heatmap from '../components/Heatmap';
 import { useAppStore } from '../../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 import styles from './page.module.css';
 
 const DIFF_COLORS  = ['#10b981', '#f59e0b', '#ef4444'];
@@ -46,7 +46,13 @@ export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const { stats, fetchStats, isLoading } = useAppStore();
+  const { stats, fetchStats, isLoading } = useAppStore(
+    useShallow((state) => ({
+      stats: state.stats,
+      fetchStats: state.fetchStats,
+      isLoading: state.isLoading,
+    }))
+  );
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -86,7 +92,7 @@ export default function Dashboard() {
 
   const totalQs = analytics.totalQuestions || 0;
   const totalSolved = analytics.totalSolved || 0;
-  const completionPercent = totalQs > 0 ? ((totalSolved / totalQs) * 100).toFixed(1) : '0.0';
+  const completionPercent = analytics.completionPercent || '0.0';
 
   const difficultyData = [
     { name: 'Easy',   value: analytics.difficultyBreakdown?.Easy   || 0 },
@@ -101,7 +107,7 @@ export default function Dashboard() {
         <h1 className={styles.title}>Your Preparation Insights</h1>
 
         {/* ── Summary cards ────────────────────────────────────────────── */}
-        <div className={styles.summaryGrid} style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <div className={styles.summaryGrid}>
           <div className={styles.summaryCard}>
             <h3>Total Solved</h3>
             <p className={styles.metric}>{totalSolved}</p>
@@ -126,13 +132,13 @@ export default function Dashboard() {
 
         {/* ── Activity heatmap ─────────────────────────────────────────── */}
         {analytics.activityTimeline && (
-          <div className={styles.chartCard} style={{ marginTop: '2rem' }}>
+          <div className={styles.chartCard} data-spaced="true">
             <h3>Calendar (Activity Heatmap)</h3>
             <Heatmap data={analytics.activityTimeline} />
           </div>
         )}
 
-        <div className={styles.chartsGrid} style={{ marginTop: '2rem' }}>
+        <div className={styles.chartsGrid} data-spaced="true">
           
           {/* Problem Status Overview */}
           <div className={styles.chartCard}>
