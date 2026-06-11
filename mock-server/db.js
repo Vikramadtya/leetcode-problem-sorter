@@ -73,6 +73,11 @@ db.exec(`
     name TEXT UNIQUE,
     description TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
   
   -- Create indexes for performance
   CREATE INDEX IF NOT EXISTS idx_questions_difficulty ON questions(diffLower);
@@ -81,6 +86,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_qcf_question ON question_company_frequencies(question_id);
   CREATE INDEX IF NOT EXISTS idx_progress_status ON progress(status);
 `);
+
+// Initialize settings
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('dailyGoal', '2')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('weeklyGoal', '10')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('srsLevel1', '1')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('srsLevel2', '3')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('srsLevel3', '7')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('srsLevel4', '14')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('maxFlashcards', '20')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('weekStart', '0')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('defaultDifficulty', 'Medium')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('defaultPlatform', 'LeetCode')`).run();
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('heatmapTheme', 'green')`).run();
 
 // Seeding logic
 function seedDatabase() {

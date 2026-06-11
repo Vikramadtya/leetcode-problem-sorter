@@ -46,6 +46,12 @@ function NavLinks({ authEnabled, session, pathname }) {
           >
             Platforms
           </Link>
+          <Link
+            href="/settings"
+            className={`${styles.navLink} ${pathname === '/settings' ? styles.active : ''}`}
+          >
+            Settings
+          </Link>
         </>
       )}
       <Link

@@ -62,6 +62,19 @@ export const useAppStore = create((set, get) => {
       weeklyCount: 0,
       activityTimeline: null,
     },
+    settings: {
+      dailyGoal: '2',
+      weeklyGoal: '10',
+      srsLevel1: '1',
+      srsLevel2: '3',
+      srsLevel3: '7',
+      srsLevel4: '14',
+      maxFlashcards: '20',
+      weekStart: '0',
+      defaultDifficulty: 'Medium',
+      defaultPlatform: 'LeetCode',
+      heatmapTheme: 'green'
+    },
     filters: defaultFilters(),
 
     // ── Filter actions ──────────────────────────────────────────────────
@@ -143,6 +156,25 @@ export const useAppStore = create((set, get) => {
       }
     },
 
+    /** Fetch configurable settings */
+    fetchSettings: async () => {
+      try {
+        const data = await apiClient.getSettings();
+        set({ settings: { ...get().settings, ...data } });
+      } catch (error) {
+        log.error('fetchSettings failed:', error);
+      }
+    },
+
+    updateSettings: async (updates) => {
+      try {
+        const updated = await apiClient.updateSettings(updates);
+        set({ settings: { ...get().settings, ...updated } });
+      } catch (error) {
+        log.error('updateSettings failed:', error);
+      }
+    },
+
     /**
      * Lightweight stats for Tracker + Explore pages.
      * Calls GET /stats (not the heavy /analytics).
@@ -164,8 +196,12 @@ export const useAppStore = create((set, get) => {
             currentStreak: data.currentStreak || 0,
             maxStreak: data.maxStreak || 0,
             weeklyCount: data.weeklyCount || 0,
+            dailyCount: data.dailyCount || 0,
             // API returns { "2026-06-10": 3, ... } object — Heatmap accepts this directly
             activityTimeline: data.activityTimeline || null,
+            recentActivity: data.recentActivity || [],
+            upcomingRevisions: data.upcomingRevisions || [],
+            topPatterns: data.topPatterns || [],
           },
         });
       } catch (error) {
@@ -200,7 +236,11 @@ export const useAppStore = create((set, get) => {
             currentStreak: data.currentStreak || 0,
             maxStreak:     data.maxStreak     || 0,
             weeklyCount:   data.weeklyCount   || 0,
+            dailyCount:    data.dailyCount    || 0,
             activityTimeline: data.activityTimeline || null,
+            recentActivity: data.recentActivity || [],
+            upcomingRevisions: data.upcomingRevisions || [],
+            topPatterns: data.topPatterns || [],
             // Full raw payload — Dashboard reads chart data from here
             _raw: data,
           },
@@ -219,12 +259,13 @@ export const useAppStore = create((set, get) => {
      */
     openFlashcards: async () => {
       try {
+        const limit = parseInt(get().settings.maxFlashcards || '20', 10);
         const data = await apiClient.getQuestions({
           reviseFilter: true,
           trackerMode: true,
-          limit: 1000,
+          limit,
         });
-        log.info('openFlashcards: loaded', data?.data?.length ?? 0, 'questions');
+        log.info('openFlashcards: loaded', data?.data?.length ?? 0, 'questions (limit:', limit, ')');
         return data?.data || [];
       } catch (error) {
         log.error('openFlashcards failed:', error);

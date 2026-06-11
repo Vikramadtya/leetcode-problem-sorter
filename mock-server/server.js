@@ -41,9 +41,15 @@ app.use(
   })
 );
 
-const SRS_INTERVALS = { 1: 1, 2: 3, 3: 7, 4: 14 };
 function calcNextRevisionDate(confidenceLevel) {
-  const days = SRS_INTERVALS[Math.max(1, Math.min(4, confidenceLevel || 3))];
+  const getVal = (key, def) => parseInt(db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value || def, 10);
+  const intervals = {
+    1: getVal('srsLevel1', 1),
+    2: getVal('srsLevel2', 3),
+    3: getVal('srsLevel3', 7),
+    4: getVal('srsLevel4', 14)
+  };
+  const days = intervals[Math.max(1, Math.min(4, confidenceLevel || 3))];
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString();
@@ -414,9 +420,11 @@ function computeAnalytics() {
     }
   }
 
-  // Weekly count
+  // Weekly count and Daily count
+  const todayStrCount = new Date().toISOString().split('T')[0];
   const sevenAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
   const weeklyCount = activityRows.filter(r => r.dateStr >= sevenAgoStr).reduce((acc, r) => acc + r.count, 0);
+  const dailyCount = activityRows.filter(r => r.dateStr === todayStrCount).reduce((acc, r) => acc + r.count, 0);
 
   // Top Companies
   const topCompanies = db.prepare(`
@@ -524,6 +532,30 @@ function computeAnalytics() {
     LIMIT 20
   `).all();
 
+  // MiniInsights: Recent Activity
+  const recentActivity = db.prepare(`
+    SELECT q.id, q.title, q.url, q.difficulty, p.dateSolved
+    FROM progress p JOIN questions q ON p.id = q.id
+    WHERE p.status IN ('Solved', 'Attempted')
+    ORDER BY p.dateSolved DESC
+    LIMIT 3
+  `).all();
+
+  // MiniInsights: Upcoming Revisions (Top 3)
+  const upcomingRevisions = db.prepare(`
+    SELECT q.id, q.title, q.url, q.difficulty, p.nextRevisionDate
+    FROM progress p JOIN questions q ON p.id = q.id
+    WHERE p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))
+    ORDER BY p.nextRevisionDate ASC
+    LIMIT 3
+  `).all();
+
+  // MiniInsights: Top Patterns (Top 3)
+  const topPatterns = patternMasteryRows
+    .map(r => ({ pattern: r.name, count: r.solved }))
+    .filter(r => r.count > 0)
+    .slice(0, 3);
+
   return {
     totalSolved: baseStats.totalSolved,
     totalAttempted: baseStats.totalAttempted,
@@ -538,6 +570,7 @@ function computeAnalytics() {
     currentStreak,
     maxStreak,
     weeklyCount,
+    dailyCount,
     activityTimeline,
     calendar: problemsSolvedOverTime,
     problemsSolvedOverTime,
@@ -555,6 +588,9 @@ function computeAnalytics() {
     patternsMostRevised,
     confidenceToProblemCount,
     revisionList,
+    recentActivity,
+    upcomingRevisions,
+    topPatterns,
     completionPercent: baseStats.totalQuestions > 0 ? ((baseStats.totalSolved / baseStats.totalQuestions) * 100).toFixed(1) : "0.0",
   };
 }
@@ -570,14 +606,48 @@ app.get('/api/v1/stats', (req, res) => {
     currentStreak: c.currentStreak,
     maxStreak: c.maxStreak,
     weeklyCount: c.weeklyCount,
+    dailyCount: c.dailyCount,
     activityTimeline: c.activityTimeline,
     difficultyBreakdown: c.difficultyBreakdown,
     completionPercent: c.completionPercent,
+    recentActivity: c.recentActivity,
+    upcomingRevisions: c.upcomingRevisions,
+    topPatterns: c.topPatterns,
   });
 });
 
 app.get('/api/v1/analytics', (req, res) => {
   res.json(computeAnalytics());
+});
+
+// ============================================================
+// SETTINGS ENDPOINTS
+// ============================================================
+app.get('/api/v1/settings', (req, res) => {
+  const rows = db.prepare(`SELECT key, value FROM settings`).all();
+  const settings = {};
+  for (const r of rows) settings[r.key] = r.value;
+  res.json(settings);
+});
+
+app.patch('/api/v1/settings', (req, res) => {
+  const updates = req.body;
+  if (!updates || typeof updates !== 'object') {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+  
+  const stmt = db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
+  db.transaction(() => {
+    for (const [key, value] of Object.entries(updates)) {
+      stmt.run(key, String(value));
+    }
+  })();
+  
+  // Return the updated settings
+  const rows = db.prepare(`SELECT key, value FROM settings`).all();
+  const settings = {};
+  for (const r of rows) settings[r.key] = r.value;
+  res.json(settings);
 });
 
 // ============================================================

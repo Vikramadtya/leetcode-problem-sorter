@@ -35,6 +35,7 @@ import ReflectionModal       from './ReflectionModal';
 import NotesModal            from './NotesModal';
 import InitialSolveModal     from './InitialSolveModal';
 import FlashcardMode         from './FlashcardMode';
+import MiniInsights          from './MiniInsights';
 import ProblemFilterToolbar  from './ProblemFilterToolbar';
 import TableSkeleton         from './TableSkeleton';
 import EmptyState            from './ui/EmptyState';
@@ -73,6 +74,7 @@ export default function TrackerPageShell({
     resetToExploreMode,
     openFlashcards,
     updateProgress,
+    settings,
   } = useAppStore(
     useShallow((state) => ({
       questions: state.questions,
@@ -87,6 +89,7 @@ export default function TrackerPageShell({
       resetToExploreMode: state.resetToExploreMode,
       openFlashcards: state.openFlashcards,
       updateProgress: state.updateProgress,
+      settings: state.settings,
     }))
   );
 
@@ -211,9 +214,12 @@ export default function TrackerPageShell({
                 <span className={styles.streakValue}>{stats.weeklyCount || 0} 🎯</span>
               </div>
             </div>
-            <div className={styles.heatmapPanel}>
-              <Heatmap data={stats.activityTimeline || {}} />
-            </div>
+        <div className={styles.insightsContainer}>
+          <div className={styles.heatmapWrapper}>
+            <Heatmap data={stats.activityTimeline || {}} settings={settings} />
+          </div>
+          <MiniInsights questions={questions} stats={stats} />
+        </div>
           </div>
         )}
 

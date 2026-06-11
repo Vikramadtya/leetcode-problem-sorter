@@ -573,9 +573,12 @@ components:
           example: 14
         weeklyCount:
           type: integer
-          minimum: 0
-          description: Number of problems solved in the last 7 days.
-          example: 5
+          description: Questions solved in the last 7 days
+          example: 12
+        dailyCount:
+          type: integer
+          description: Questions solved today
+          example: 2
         completionPercent:
           type: string
           description: Computed completion percentage of all questions.
@@ -1035,6 +1038,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [System]
+      summary: Get user settings
+      responses:
+        '200':
+          description: Key-value pairs of settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+    patch:
+      operationId: updateSettings
+      tags: [System]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Updated key-value pairs
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Invalid payload
 
   /stats:
     get:

@@ -339,7 +339,8 @@
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
   overflow-x: auto;
-  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
 }
 
 .exploreLink {

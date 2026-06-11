@@ -275,6 +275,39 @@ class ApiClient {
     }
   }
 
+  // ── Settings ──────────────────────────────────────────────────────────
+
+  async getSettings() {
+    try {
+      const res = await fetchWithRetry(`${API_BASE}/settings`, {
+        headers: await this.getHeaders(),
+      });
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] getSettings:', error.message);
+      toast.error(`Failed to load settings: ${error.message}`);
+      return { dailyGoal: '2', weeklyGoal: '10' }; // fallback
+    }
+  }
+
+  async updateSettings(updates) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/settings`, {
+        method: 'PATCH',
+        headers: await this.getHeaders(),
+        body: JSON.stringify(updates),
+      });
+      if (res.status === 401) { this._handle401(); return null; }
+      if (!res.ok) throw new Error(await parseError(res));
+      return await res.json();
+    } catch (error) {
+      console.error('[API] updateSettings:', error.message);
+      toast.error(`Failed to update settings: ${error.message}`);
+      throw error;
+    }
+  }
+
   // ── Custom questions ──────────────────────────────────────────────────
 
   async createCustomQuestion(data) {

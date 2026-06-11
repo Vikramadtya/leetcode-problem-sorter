@@ -3,7 +3,7 @@
 import dayjs from 'dayjs';
 import styles from './Heatmap.module.css';
 
-export default function Heatmap({ data }) {
+export default function Heatmap({ data, settings = {} }) {
   // Accept both:
   //   object format: { "2025-06-01": 2, "2025-06-02": 1, ... }  (from API)
   //   array format:  [{ date, count }, ...]                       (legacy)
@@ -20,9 +20,11 @@ export default function Heatmap({ data }) {
   const endDate = dayjs();
   const startDate = endDate.subtract(364, 'day'); // Approximately 52 weeks
   
-  // Align start date to Sunday
-  const startDayOfWeek = startDate.day();
-  const alignedStartDate = startDate.subtract(startDayOfWeek, 'day');
+  // Align start date to WeekStart setting (0 = Sunday, 1 = Monday)
+  const weekStart = parseInt(settings.weekStart || '0', 10);
+  let startOffset = startDate.day() - weekStart;
+  if (startOffset < 0) startOffset += 7;
+  const alignedStartDate = startDate.subtract(startOffset, 'day');
 
   const totalDays = endDate.diff(alignedStartDate, 'day') + 1;
   const weeks = [];
@@ -47,9 +49,24 @@ export default function Heatmap({ data }) {
 
   const getColor = (count) => {
     if (count === 0) return 'var(--bg-hover)';
-    if (count === 1) return 'var(--primary-light, #34d399)'; // Light green
-    if (count <= 3) return 'var(--primary)'; // Normal green
-    return 'var(--primary-dark, #059669)'; // Dark green
+    const theme = settings.heatmapTheme || 'green';
+    
+    if (theme === 'blue') {
+      if (count === 1) return '#93c5fd';
+      if (count <= 3) return '#3b82f6';
+      return '#1d4ed8';
+    }
+    
+    if (theme === 'purple') {
+      if (count === 1) return '#d8b4fe';
+      if (count <= 3) return '#a855f7';
+      return '#7e22ce';
+    }
+
+    // Default green
+    if (count === 1) return 'var(--primary-light, #34d399)';
+    if (count <= 3) return 'var(--primary)';
+    return 'var(--primary-dark, #059669)';
   };
 
   return (

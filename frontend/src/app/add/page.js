@@ -6,11 +6,15 @@ import { useRouter } from 'next/navigation';
 import Header from '../components/Header';
 import toast from 'react-hot-toast';
 import { apiClient } from '../../lib/api/apiClient';
+import { useAppStore } from '../../store/useAppStore';
 import styles from './page.module.css';
 
 export default function AddProblem() {
   const { data: session } = useSession();
   const router = useRouter();
+  const settings = useAppStore(state => state.settings);
+  const fetchSettings = useAppStore(state => state.fetchSettings);
+
   const [utilities, setUtilities] = useState(null);
   const [loading, setLoading] = useState(true);
   
@@ -18,19 +22,33 @@ export default function AddProblem() {
     id: '',
     title: '',
     link: '',
-    difficulty: 'Medium',
-    platform: '',
+    difficulty: settings?.defaultDifficulty || 'Medium',
+    platform: settings?.defaultPlatform || '',
     pattern: '',
     confidenceLevel: '',
     timeTaken: '',
     tags: []
   });
 
+  // Fetch settings on mount just in case
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  // Update form if settings load later and user hasn't changed it
+  useEffect(() => {
+    setForm(prev => ({
+      ...prev,
+      difficulty: prev.difficulty || settings?.defaultDifficulty || 'Medium',
+      platform: prev.platform || settings?.defaultPlatform || ''
+    }));
+  }, [settings]);
+
   useEffect(() => {
     apiClient.getUtilities()
       .then(data => {
         setUtilities(data);
-        if (data.platforms && data.platforms.length > 0) {
+        if (!form.platform && (!settings?.defaultPlatform) && data.platforms && data.platforms.length > 0) {
           setForm(prev => ({ ...prev, platform: data.platforms[0].name }));
         }
         setLoading(false);
