@@ -35,6 +35,7 @@ function Table({
   onOpenReflection,
   onOpenInitialSolve,
   onOpenNotes,
+  onOpenAttempt,
   authEnabled,
   patterns = [],
   isCompactMode = false,

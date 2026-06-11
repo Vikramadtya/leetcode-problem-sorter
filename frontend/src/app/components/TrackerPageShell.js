@@ -155,7 +155,12 @@ export default function TrackerPageShell({
     const q = questions.find(q => q.id === id);
     if (!q) return;
     const oldSpent = q.progress?.timeSpent || 0;
-    await updateProgress(id, { status: 'Attempted', timeSpent: oldSpent + sessionSeconds });
+    const oldAttempts = q.progress?.attempts || 0;
+    await updateProgress(id, { 
+      status: 'Attempted', 
+      timeSpent: oldSpent + sessionSeconds,
+      attempts: oldAttempts + 1 
+    });
     setActiveAttemptQ(null);
   }, [questions, updateProgress]);
 

@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Explore | Problem Sorter',
+  title: 'Explore',
   description: 'Search and filter the complete catalog of LeetCode problems.',
 };
 

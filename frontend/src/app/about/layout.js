@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'About | Problem Sorter',
+  title: 'About',
   description: 'Learn about Problem Sorter, the blazingly fast DSA progress tracker.',
 };
 

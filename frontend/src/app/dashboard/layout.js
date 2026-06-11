@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Dashboard | Problem Sorter',
+  title: 'Dashboard',
   description: 'View your analytics, streak, and algorithmic pattern mastery.',
 };
 

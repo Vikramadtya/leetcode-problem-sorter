@@ -1,57 +1,79 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
-import Timer from './Timer';
-import styles from './ReflectionModal.module.css'; // Reusing styles
+import React, { useState, useEffect } from 'react';
+import styles from './ActiveAttemptModal.module.css';
 
 export default function ActiveAttemptModal({ question, onClose, onFailed, onSolved }) {
-  const timerRef = useRef(null);
+  const [seconds, setSeconds] = useState(0);
+  const [isActive, setIsActive] = useState(true);
+
+  // Prevent scrolling on the body while the full-screen modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (isActive) {
+      interval = setInterval(() => {
+        setSeconds(s => s + 1);
+      }, 1000);
+    } else if (!isActive && seconds !== 0) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isActive, seconds]);
+
+  const formatTime = (totalSeconds) => {
+    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   const handleFailed = () => {
-    const timeSpent = timerRef.current ? timerRef.current.getTime() : 0;
-    onFailed(question.id, timeSpent);
+    onFailed(question.id, seconds);
   };
 
   const handleSolved = () => {
-    const timeSpent = timerRef.current ? timerRef.current.getTime() : 0;
-    onSolved(question.id, timeSpent);
+    onSolved(question.id, seconds);
   };
 
+  const handleStop = () => {
+    onClose();
+  };
+
+  const diffClass = question.difficulty ? styles[question.difficulty.toLowerCase()] : '';
+
   return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent} style={{ textAlign: 'center', padding: '3rem 2rem' }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Attempting: {question.title}</h2>
-        <span className={`${styles.pill} ${styles[question.difficulty?.toLowerCase()]}`} style={{ marginBottom: '2rem', display: 'inline-block' }}>
+    <div className={styles.fullscreenOverlay}>
+      <div className={styles.timerContainer}>
+        <h2 className={styles.questionTitle}>Focusing on: {question.title}</h2>
+        <span className={`${styles.pill} ${diffClass}`}>
           {question.difficulty}
         </span>
         
-        <div style={{ display: 'flex', justifyContent: 'center', margin: '2rem 0', transform: 'scale(1.5)' }}>
-          <Timer ref={timerRef} autoStart={true} />
+        <div className={styles.timeDisplay}>
+          {formatTime(seconds)}
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '2rem' }}>
-          <button 
-            className={styles.cancelBtn} 
-            onClick={handleFailed}
-            style={{ padding: '0.75rem 2rem', fontSize: '1.1rem', background: 'var(--bg-hover)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}
-          >
-            I Failed
+        <div className={styles.controlsRow}>
+          <button className={styles.controlBtn} onClick={() => setIsActive(!isActive)} title={isActive ? "Pause" : "Resume"}>
+            {isActive ? '⏸️ Pause' : '▶️ Resume'}
           </button>
-          <button 
-            className={styles.saveBtn} 
-            onClick={handleSolved}
-            style={{ padding: '0.75rem 2rem', fontSize: '1.1rem', background: 'var(--success)', color: '#fff', border: 'none' }}
-          >
-            I Solved It
+          <button className={styles.controlBtn} onClick={handleStop} title="Stop & Forget">
+            ⏹️ Stop
           </button>
         </div>
 
-        <div style={{ marginTop: '2rem' }}>
-          <button 
-            onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer' }}
-          >
-            Cancel Attempt
+        <div className={styles.actionRow}>
+          <button className={`${styles.actionBtn} ${styles.failBtn}`} onClick={handleFailed}>
+            I Failed
+          </button>
+          <button className={`${styles.actionBtn} ${styles.successBtn}`} onClick={handleSolved}>
+            I Solved It
           </button>
         </div>
       </div>
