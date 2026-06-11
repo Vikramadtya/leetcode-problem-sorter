@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Timer from './Timer';
 import styles from './FlashcardMode.module.css';
 
 /**
@@ -23,6 +24,7 @@ export default function FlashcardMode({ questions, onClose, onBulkSave }) {
   // Phase 4.1: Accumulate pending updates
   const [pendingUpdates, setPendingUpdates] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const timerRef = useRef(null);
 
   if (!questions || questions.length === 0) {
     return (
@@ -41,9 +43,15 @@ export default function FlashcardMode({ questions, onClose, onBulkSave }) {
 
   // Phase 4.2: Accumulate update, advance to next card
   const handleScore = (level) => {
-    const update = { id: currentQ.id, confidenceLevel: level, revise: true };
+    const timeSpent = timerRef.current ? timerRef.current.getTime() : 0;
+    const update = { id: currentQ.id, confidenceLevel: level, revise: true, timeSpent };
     const newUpdates = [...pendingUpdates, update];
     setPendingUpdates(newUpdates);
+    
+    if (timerRef.current) {
+      timerRef.current.reset();
+      timerRef.current.start();
+    }
 
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
@@ -80,7 +88,10 @@ export default function FlashcardMode({ questions, onClose, onBulkSave }) {
       <div className={styles.modalContent}>
         <div className={styles.header}>
           <h3>Quick Recall Session</h3>
-          <span className={styles.counter}>{currentIndex + 1} / {questions.length}</span>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <Timer ref={timerRef} autoStart={true} />
+            <span className={styles.counter}>{currentIndex + 1} / {questions.length}</span>
+          </div>
         </div>
 
         {/* Progress bar — fills as cards are completed */}

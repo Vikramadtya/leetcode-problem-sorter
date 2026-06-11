@@ -24,7 +24,7 @@
  *   authEnabled    boolean
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 
 import Header                from './Header';
@@ -34,7 +34,8 @@ import Table                 from './Table';
 import ReflectionModal       from './ReflectionModal';
 import NotesModal            from './NotesModal';
 import InitialSolveModal     from './InitialSolveModal';
-import FlashcardMode         from './FlashcardMode';
+import WrapUpModal           from './WrapUpModal';
+import ActiveAttemptModal    from './ActiveAttemptModal';
 import MiniInsights          from './MiniInsights';
 import ProblemFilterToolbar  from './ProblemFilterToolbar';
 import TableSkeleton         from './TableSkeleton';
@@ -97,8 +98,29 @@ export default function TrackerPageShell({
   const [activeNotesQ,        setActiveNotesQ]        = useState(null);
   const [activeReflectionQ,   setActiveReflectionQ]   = useState(null);
   const [activeInitialSolveQ, setActiveInitialSolveQ] = useState(null);
+  const [activeAttemptQ,      setActiveAttemptQ]      = useState(null);
   const [isFlashcardOpen,     setIsFlashcardOpen]     = useState(false);
+  const [showWrapUp,          setShowWrapUp]          = useState(false);
   const [flashcardQuestions,  setFlashcardQuestions]  = useState([]);
+
+  useEffect(() => {
+    if (mode === 'tracker' && !isLoading) {
+      const today = new Date();
+      if (today.getDay() === 1) { // Monday
+        const lastSeenStr = localStorage.getItem('wrapUpLastSeen');
+        const todayStr = today.toISOString().split('T')[0];
+        if (lastSeenStr !== todayStr) {
+          setShowWrapUp(true);
+        }
+      }
+    }
+  }, [mode, isLoading]);
+
+  const closeWrapUp = () => {
+    setShowWrapUp(false);
+    const todayStr = new Date().toISOString().split('T')[0];
+    localStorage.setItem('wrapUpLastSeen', todayStr);
+  };
   const [isCompactMode,       setIsCompactMode]       = useState(false);
 
   // ── Close all modals (bound to Escape key via usePageInit) ─────────────────
@@ -106,21 +128,45 @@ export default function TrackerPageShell({
     setActiveNotesQ(null);
     setActiveReflectionQ(null);
     setActiveInitialSolveQ(null);
+    setActiveAttemptQ(null);
     setIsFlashcardOpen(false);
   }, []);
-
-  // ── Notes save — stable callback, NOT an inline arrow in JSX ──────────────
-  const handleSaveNotes = useCallback(
-    (id, notes) => updateProgress(id, { notes }),
-    [updateProgress],
-  );
 
   // ── Page init: fetch data + wire Escape/⌘F shortcuts ──────────────────────
   usePageInit(mode, { onEscape: closeAllModals });
 
   // ── Modal handlers (solve, reflection, notes-open) ─────────────────────────
-  const { handleSaveInitialSolve, handleSaveReflection, handleOpenNotes } =
-    useModalHandlers({ setActiveInitialSolveQ, setActiveReflectionQ, setActiveNotesQ });
+  const {
+    handleCloseNotes,
+    handleSaveNotes,
+    handleCloseReflection,
+    handleSaveReflection,
+    handleCloseInitialSolve,
+    handleSaveInitialSolve,
+  } = useModalHandlers({
+    setActiveNotesQ,
+    setActiveReflectionQ,
+    setActiveInitialSolveQ,
+  });
+
+  const handleAttemptFailed = useCallback(async (id, sessionSeconds) => {
+    const q = questions.find(q => q.id === id);
+    if (!q) return;
+    const oldSpent = q.progress?.timeSpent || 0;
+    await updateProgress(id, { status: 'Attempted', timeSpent: oldSpent + sessionSeconds });
+    setActiveAttemptQ(null);
+  }, [questions, updateProgress]);
+
+  const handleAttemptSolved = useCallback((id, sessionSeconds) => {
+    const q = questions.find(q => q.id === id);
+    if (!q) return;
+    
+    // Pass the sessionSeconds to the initial solve modal state so it knows how much time was spent.
+    // We add a temporary property to the question object to pass this data.
+    const qWithTime = { ...q, sessionSeconds };
+    setActiveAttemptQ(null);
+    setActiveInitialSolveQ(qWithTime);
+  }, [questions]);
 
   // ── Filter handlers ────────────────────────────────────────────────────────
   const {
@@ -181,7 +227,15 @@ export default function TrackerPageShell({
           </div>
           <div className={styles.headerActions}>
             {showStreaks && (
-              <button
+              <>
+                <button
+                  className={styles.flashcardBtn}
+                  onClick={() => setShowWrapUp(true)}
+                  style={{ background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', marginRight: '8px' }}
+                >
+                  🎉 Weekly Wrap-Up
+                </button>
+                <button
                 className={styles.flashcardBtn}
                 onClick={handleOpenFlashcards}
                 disabled={stats.dueRevision === 0}
@@ -190,6 +244,7 @@ export default function TrackerPageShell({
               >
                 ⚡ Quick Recall{stats.dueRevision > 0 ? ` (${stats.dueRevision})` : ''}
               </button>
+              </>
             )}
             <Link href={navHref} className={styles.exploreLink}>
               {navLabel}
@@ -279,7 +334,8 @@ export default function TrackerPageShell({
           <Table
             onOpenReflection={setActiveReflectionQ}
             onOpenInitialSolve={setActiveInitialSolveQ}
-            onOpenNotes={handleOpenNotes}
+            onOpenNotes={setActiveNotesQ}
+            onOpenAttempt={setActiveAttemptQ}
             authEnabled={authEnabled}
             patterns={patterns}
             isCompactMode={isCompactMode}
@@ -288,6 +344,15 @@ export default function TrackerPageShell({
       </main>
 
       {/* ── Modals ────────────────────────────────────────────────────────── */}
+      {showWrapUp && <WrapUpModal onClose={closeWrapUp} />}
+      {activeAttemptQ && (
+        <ActiveAttemptModal
+          question={activeAttemptQ}
+          onClose={() => setActiveAttemptQ(null)}
+          onFailed={handleAttemptFailed}
+          onSolved={handleAttemptSolved}
+        />
+      )}
       {activeInitialSolveQ && (
         <InitialSolveModal
           question={activeInitialSolveQ}

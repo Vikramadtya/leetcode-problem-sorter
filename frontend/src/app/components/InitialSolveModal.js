@@ -4,6 +4,7 @@ import { useState } from 'react';
 import styles from './ReflectionModal.module.css'; // Reuse styles
 
 export default function InitialSolveModal({ question, patterns = [], onClose, onSave }) {
+  const sessionSeconds = question.sessionSeconds || 0;
   const [solutionLink, setSolutionLink] = useState('');
   const [notes, setNotes] = useState('');
   const [pattern, setPattern] = useState(question.progress?.pattern || '');
@@ -17,14 +18,24 @@ export default function InitialSolveModal({ question, patterns = [], onClose, on
   ];
 
   const handleSave = () => {
-    onSave(question.id, { solutionLink, notes, pattern, memoryStrength });
+    const timeSpent = sessionSeconds;
+    onSave(question.id, { solutionLink, notes, pattern, memoryStrength, timeSpent });
+  };
+
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
   };
 
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent}>
-        <div className={styles.modalHeader}>
+        <div className={styles.modalHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3>Mark Solved: {question.title}</h3>
+          <div style={{ color: 'var(--text-muted)' }}>
+            Time Spent: {formatTime(sessionSeconds)}
+          </div>
         </div>
         
         <div className={styles.modalBody}>

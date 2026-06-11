@@ -27,47 +27,7 @@ const formatTime = (seconds) => {
 const capitalizeSlug = (slug) =>
   slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-// ─── Custom hook: per-question timer ─────────────────────────────────────
-// Timer refs live outside React state so they survive re-renders.
-
-function useTimers() {
-  // Map<questionId, startTimestampMs> — a ref so mutations don't cause re-renders
-  const activeTimers = useRef({});
-  // Forces a re-render when timer state changes (so the time display updates)
-  const [tick, setTick] = useState(0);
-  const tickRef = useRef(null);
-
-  const startTimer = useCallback((id) => {
-    if (activeTimers.current[id]) return; // already running
-    activeTimers.current[id] = Date.now();
-    // Tick every second to update the display
-    tickRef.current = setInterval(() => setTick(t => t + 1), 1000);
-  }, []);
-
-  const stopTimer = useCallback((id) => {
-    const startTime = activeTimers.current[id];
-    if (!startTime) return 0;
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    delete activeTimers.current[id];
-    if (Object.keys(activeTimers.current).length === 0) {
-      clearInterval(tickRef.current);
-    }
-    return elapsed;
-  }, []);
-
-  const getElapsed = useCallback((id) => {
-    const start = activeTimers.current[id];
-    if (!start) return 0;
-    return Math.floor((Date.now() - start) / 1000);
-  }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isRunning = useCallback((id) => !!activeTimers.current[id], [tick]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cleanup on unmount
-  useEffect(() => () => clearInterval(tickRef.current), []);
-
-  return { startTimer, stopTimer, getElapsed, isRunning };
-}
+// removed useTimers
 
 // ─── Table component ──────────────────────────────────────────────────────
 
@@ -88,7 +48,6 @@ function Table({
       updateProgress: state.updateProgress,
     }))
   );
-  const { startTimer, stopTimer, getElapsed, isRunning } = useTimers();
 
   const isVisible = useCallback((col) => visibleColumns.includes(col), [visibleColumns]);
 
@@ -186,9 +145,7 @@ function Table({
             const rowClass = isSolved ? styles.rowSolved : (isAttempted ? styles.attemptedRow : styles.row);
             const attempts = prog.attempts || 0;
 
-            const timerRunning = isRunning(q.id);
-            const sessionSeconds = getElapsed(q.id);
-            const totalTime = (prog.timeSpent || 0) + sessionSeconds;
+            const totalTime = prog.timeSpent || 0;
 
             const tagArray = Array.isArray(prog.tags) ? prog.tags : [];
 
@@ -197,46 +154,69 @@ function Table({
                 {/* STATUS column */}
                 {authEnabled && (
                   <td className={`${styles.td} ${styles.tdCenter}`}>
-                    <div className={styles.statusCell}>
+                    <div className={styles.statusCell} style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
                       <div className={styles.checkboxRow}>
-                        {/* Attempted checkbox */}
-                        <button
-                          className={`${styles.checkboxBtn} ${isAttempted ? styles.checkedAttempted : ''}`}
-                          onClick={() => {
-                            if (isAttempted) {
-                              updateProgress(q.id, { status: 'Unsolved' });
-                            } else {
-                              updateProgress(q.id, { status: 'Attempted' });
-                            }
-                          }}
-                          title={isAttempted ? 'Unmark Attempted' : 'Mark Attempted'}
-                          aria-label={isAttempted ? 'Unmark Attempted' : 'Mark Attempted'}
-                        >
-                          {isAttempted && (
-                            <span className={styles.attemptedLabel}>A</span>
-                          )}
-                        </button>
+                          {/* Attempted checkbox */}
+                          <button
+                            className={`${styles.checkboxBtn} ${isAttempted ? styles.checkedAttempted : ''}`}
+                            onClick={() => {
+                              if (isAttempted) {
+                                updateProgress(q.id, { status: 'Unsolved' });
+                              } else {
+                                updateProgress(q.id, { status: 'Attempted' });
+                              }
+                            }}
+                            title={isAttempted ? 'Unmark Attempted' : 'Mark Attempted'}
+                            aria-label={isAttempted ? 'Unmark Attempted' : 'Mark Attempted'}
+                          >
+                            {isAttempted && (
+                              <span className={styles.attemptedLabel}>A</span>
+                            )}
+                          </button>
 
-                        {/* Solved checkbox */}
-                        <button
-                          className={`${styles.checkboxBtn} ${isSolved ? styles.checked : ''}`}
-                          onClick={() => {
-                            if (isSolved) {
-                              updateProgress(q.id, { status: 'Unsolved' });
-                            } else {
-                              if (onOpenInitialSolve) onOpenInitialSolve(q);
-                            }
-                          }}
-                          title={isSolved ? 'Unmark Solved (clears all data)' : 'Mark Solved'}
-                          aria-label={isSolved ? 'Unmark Solved' : 'Mark Solved'}
-                        >
-                          {isSolved && (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
+                          {/* Solved checkbox */}
+                          <button
+                            className={`${styles.checkboxBtn} ${isSolved ? styles.checked : ''}`}
+                            onClick={() => {
+                              if (isSolved) {
+                                updateProgress(q.id, { status: 'Unsolved' });
+                              } else {
+                                if (onOpenInitialSolve) onOpenInitialSolve(q);
+                              }
+                            }}
+                            title={isSolved ? 'Unmark Solved (clears all data)' : 'Mark Solved'}
+                            aria-label={isSolved ? 'Unmark Solved' : 'Mark Solved'}
+                          >
+                            {isSolved && (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                        
+                        {!isSolved && (
+                          <button
+                            className={styles.attemptMainBtn}
+                            onClick={() => onOpenAttempt && onOpenAttempt(q)}
+                            style={{ 
+                              padding: '4px 10px', 
+                              fontSize: '0.75rem', 
+                              borderRadius: '12px', 
+                              background: isAttempted ? 'var(--warning)' : 'var(--primary)', 
+                              color: isAttempted ? '#000' : '#fff', 
+                              border: 'none', 
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title={isAttempted ? "Attempt Again with Timer" : "Attempt with Timer"}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            {isAttempted ? 'Attempt Again' : 'Timer Attempt'}
+                          </button>
+                        )}
 
                       {isSolved && prog.confidenceLevel && (
                         <div className={styles.confidenceSelector}>
@@ -456,23 +436,7 @@ function Table({
                 {/* Timer */}
                 {!isCompactMode && authEnabled && isVisible('Time') && (
                   <td className={`${styles.td} ${styles.tdCenter}`}>
-                    <div className={styles.timeTracker}>
-                      <span className={styles.timeText}>{formatTime(totalTime)}</span>
-                      <button
-                        className={`${styles.timerBtn} ${timerRunning ? styles.timerActive : ''}`}
-                        aria-label={timerRunning ? 'Stop timer' : 'Start timer'}
-                        onClick={() => {
-                          if (timerRunning) {
-                            const elapsed = stopTimer(q.id);
-                            updateProgress(q.id, { timeSpent: (prog.timeSpent || 0) + elapsed });
-                          } else {
-                            startTimer(q.id);
-                          }
-                        }}
-                      >
-                        {timerRunning ? '⏹️' : '⏱️'}
-                      </button>
-                    </div>
+                    <span className={styles.timeText}>{formatTime(totalTime)}</span>
                   </td>
                 )}
 

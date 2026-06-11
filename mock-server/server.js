@@ -620,6 +620,54 @@ app.get('/api/v1/analytics', (req, res) => {
   res.json(computeAnalytics());
 });
 
+app.get('/api/v1/wrapup', (req, res) => {
+  const sevenAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+  
+  const totalSolved = db.prepare(`SELECT COUNT(*) as count FROM progress WHERE status = 'Solved' AND date(dateSolved) >= ?`).get(sevenAgoStr).count;
+  
+  const totalSeconds = db.prepare(`SELECT SUM(timeSpent) as sum FROM progress WHERE status = 'Solved' AND date(dateSolved) >= ?`).get(sevenAgoStr).sum || 0;
+  const totalHours = parseFloat((totalSeconds / 3600).toFixed(1));
+  
+  const patternRow = db.prepare(`SELECT pattern, COUNT(*) as count FROM progress WHERE status = 'Solved' AND date(dateSolved) >= ? AND pattern IS NOT NULL AND pattern != '' GROUP BY pattern ORDER BY count DESC LIMIT 1`).get(sevenAgoStr);
+  const topPattern = patternRow ? patternRow.pattern : "N/A";
+  
+  const activityRows = db.prepare(`SELECT date(dateSolved) as dateStr FROM progress WHERE status = 'Solved' AND date(dateSolved) >= ? GROUP BY date(dateSolved) ORDER BY dateStr ASC`).all(sevenAgoStr);
+  let streak = 0, maxStreak = 0;
+  for (let i = 0; i < activityRows.length; i++) {
+    if (i === 0) { streak = 1; maxStreak = 1; }
+    else {
+      const diff = Math.round((new Date(activityRows[i].dateStr) - new Date(activityRows[i - 1].dateStr)) / 86400000);
+      if (diff === 1) streak++;
+      else streak = 1;
+      if (streak > maxStreak) maxStreak = streak;
+    }
+  }
+
+  res.json({ totalSolved, totalHours, topPattern, longestStreak: maxStreak });
+});
+
+app.post('/api/v1/extension/log', (req, res) => {
+  const { title, link, difficulty, platform, timeTaken } = req.body;
+  if (!title || !link || !difficulty || !platform || timeTaken == null) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  
+  const idStr = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  db.prepare(`INSERT INTO questions (id, title, difficulty, link) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`).run(idStr, title, difficulty, link);
+  
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO progress (id, status, dateSolved, timeSpent) 
+    VALUES (?, 'Solved', ?, ?) 
+    ON CONFLICT(id) DO UPDATE SET 
+      status = 'Solved',
+      dateSolved = COALESCE(progress.dateSolved, excluded.dateSolved),
+      timeSpent = progress.timeSpent + excluded.timeSpent
+  `).run(idStr, now, timeTaken);
+  
+  res.json({ message: "Logged" });
+});
+
 // ============================================================
 // SETTINGS ENDPOINTS
 // ============================================================

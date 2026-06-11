@@ -596,6 +596,39 @@ components:
         difficultyBreakdown:
           $ref: '#/components/schemas/DifficultyBreakdown'
 
+    WrapUpResponse:
+      type: object
+      properties:
+        totalSolved:
+          type: integer
+          description: Total problems solved in the last 7 days.
+        totalHours:
+          type: number
+          description: Total hours spent solving in the last 7 days.
+        topPattern:
+          type: string
+          description: The most frequently practiced pattern this week.
+        longestStreak:
+          type: integer
+          description: Longest streak this week.
+
+    ExtensionLogRequest:
+      type: object
+      required: [title, link, difficulty, platform, timeTaken]
+      properties:
+        title:
+          type: string
+        link:
+          type: string
+        difficulty:
+          type: string
+          enum: [Easy, Medium, Hard]
+        platform:
+          type: string
+        timeTaken:
+          type: integer
+          description: Time taken in seconds
+
     AnalyticsResponse:
       allOf:
         - $ref: '#/components/schemas/StatsResponse'
@@ -1076,6 +1109,40 @@ paths:
                   type: string
         '400':
           description: Invalid payload
+
+  /wrapup:
+    get:
+      operationId: getWrapUp
+      tags: [Analytics]
+      summary: Weekly wrap-up statistics
+      description: Returns aggregate data for the past 7 days for the WrapUp modal.
+      responses:
+        '200':
+          description: Weekly wrapup data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WrapUpResponse'
+        '401':
+          description: Unauthorized
+
+  /extension/log:
+    post:
+      operationId: logFromExtension
+      tags: [Progress]
+      summary: Log a problem from the browser extension
+      description: Automatically upserts a question and its progress from LeetCode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionLogRequest'
+      responses:
+        '200':
+          description: Successfully logged
+        '401':
+          description: Unauthorized
 
   /stats:
     get:
