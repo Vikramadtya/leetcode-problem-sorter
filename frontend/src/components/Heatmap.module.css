@@ -1,0 +1,75 @@
+.heatmapWrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.gridContainer {
+  display: flex;
+  gap: 8px;
+}
+
+.daysColumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-top: 10px; /* Align with cells since week starts on Sun */
+  font-size: 10px;
+  color: var(--text-muted);
+  height: 98px; /* 7 cells * 14px */
+}
+
+.dayLabel {
+  line-height: 14px;
+}
+
+.grid {
+  display: flex;
+  gap: 3px;
+}
+
+.weekColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-color);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 15px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.legendText {
+  margin: 0 4px;
+}
+
+/* ── Static legend colour cells ─────────────────────────────────────────── */
+/* These mirror the getColor() function buckets but as static CSS classes.  */
+.cellL0 {
+  background-color: var(--bg-hover);
+  border: 1px solid var(--border-color);
+}
+.cellL1 {
+  background-color: var(--primary-light, #34d399);
+}
+.cellL2 {
+  background-color: var(--primary);
+}
+.cellL3 {
+  background-color: var(--primary-dark, #059669);
+}

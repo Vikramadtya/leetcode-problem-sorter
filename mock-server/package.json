@@ -15,10 +15,13 @@
   "description": "",
   "dependencies": {
     "better-sqlite3": "^12.10.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "csv-parse": "^6.2.1",
     "express": "^5.2.1",
     "express-openapi-validator": "^5.6.2",
+    "google-auth-library": "^10.7.0",
+    "jsonwebtoken": "^9.0.3",
     "yaml": "^2.9.0"
   }
 }

@@ -3,13 +3,17 @@ const cors = require('cors');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const OpenApiValidator = require('express-openapi-validator');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const db = require('./db'); // SQLite db
 
 const PORT = process.env.PORT || 4000;
 const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-dev-key';
 
-app.use(cors({ origin: ['http://localhost:3000', 'http://127.0.0.1:3000'] }));
+app.use(cors({ origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'], credentials: true }));
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
 
 app.use((req, _res, next) => {
   req.requestId = randomUUID();
@@ -98,6 +102,85 @@ function formatQuestion(row) {
     }
   };
 }
+
+// ============================================================
+// AUTHENTICATION ROUTES
+// ============================================================
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password, googleAccessToken } = req.body;
+  let userEmail, userName, userPicture, userId;
+
+  if (googleAccessToken) {
+    try {
+      const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${googleAccessToken}` }
+      });
+      if (!response.ok) throw new Error('Failed to verify Google token');
+      const data = await response.json();
+      userEmail = data.email;
+      userName = data.name;
+      userPicture = data.picture;
+      userId = data.sub;
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid Google token' });
+    }
+  } else {
+    // Mock login fallback
+    if (!username && !password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    userName = username === 'google' || !username ? 'Mock User' : username;
+    userEmail = `${userName.toLowerCase().replace(/\s+/g, '')}@example.com`;
+    userId = 'mock-user-1';
+  }
+
+  const user = { id: userId, name: userName, email: userEmail, image: userPicture };
+  
+  // Access Token (short-lived)
+  const accessToken = jwt.sign(user, JWT_SECRET, { expiresIn: '15m' });
+  
+  // Refresh Token (long-lived, HttpOnly)
+  const refreshToken = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+
+  res.json({ accessToken, user });
+});
+
+app.post('/api/auth/refresh', (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
+
+  jwt.verify(refreshToken, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid refresh token' });
+    
+    // Generate new Access Token
+    const payload = { id: user.id, name: user.name, email: user.email };
+    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+    res.json({ accessToken, user: payload });
+  });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('refreshToken');
+  res.json({ success: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    res.json({ user });
+  });
+});
 
 // ============================================================
 // GET /api/v1/questions
@@ -222,7 +305,7 @@ app.get('/api/v1/questions', (req, res) => {
   const rows = db.prepare(selectQuery).all(...params);
   const data = rows.map(formatQuestion);
 
-  res.json({ data, totalCount, page, totalPages });
+  res.json({ data, total: totalCount, page, limit });
 });
 
 // ============================================================
@@ -601,7 +684,7 @@ function computeAnalytics() {
     maxStreak,
     weeklyCount,
     dailyCount,
-    activityTimeline,
+    activityTimeline: problemsSolvedOverTime,
     calendar: problemsSolvedOverTime,
     problemsSolvedOverTime,
     difficultyBreakdown: diffs,
