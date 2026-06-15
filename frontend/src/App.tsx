@@ -29,6 +29,8 @@ const Configuration = lazy(() => import('./pages/Configuration'));
 const Comments = lazy(() => import('./pages/Comments'));
 const About = lazy(() => import('./pages/About'));
 const Add = lazy(() => import('./pages/Add'));
+const NotePage = lazy(() => import('./pages/NotePage'));
+const ErrorPage = lazy(() => import('./pages/ErrorPage'));
 
 const AuthGuard = ({ children }) => {
   const { status } = useSession();
@@ -38,8 +40,9 @@ const AuthGuard = ({ children }) => {
 };
 
 
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id';
+import config from './config.json';
 
+const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id';
 // Fallback spinner for lazy loaded routes
 const PageFallback = () => (
   <div
@@ -123,6 +126,15 @@ export default function App() {
                           </AuthGuard>
                         }
                       />
+                      <Route
+                        path="/notes/:id"
+                        element={
+                          <AuthGuard>
+                            <NotePage />
+                          </AuthGuard>
+                        }
+                      />
+                      <Route path="*" element={<ErrorPage />} />
                     </Routes>
                   </Suspense>
                 </div>

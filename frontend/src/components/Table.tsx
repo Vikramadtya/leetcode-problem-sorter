@@ -684,7 +684,7 @@ function Table({
 
                 {/* Acceptance */}
                 {!isCompactMode && isVisible('Acceptance %') && (
-                  <td className={`${styles.td} ${styles.tdRight}`}>{q.acceptanceRate || '-'}</td>
+                  <td className={`${styles.td} ${styles.tdRight}`}>{q.acceptanceRate != null ? `${q.acceptanceRate}%` : '-'}</td>
                 )}
 
                 {/* Frequency */}

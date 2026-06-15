@@ -13,12 +13,12 @@ import { useAppStore } from '../store/useAppStore';
  * @param {object}   opts
  * @param {Function} opts.setActiveInitialSolveQ   State setter for initial-solve modal question
  * @param {Function} opts.setActiveReflectionQ      State setter for reflection modal question
- * @param {Function} opts.setActiveNotesQ           State setter for notes modal question
+ * @param {Function} opts.navigate                  Navigate function for notes routing
  */
 export function useModalHandlers({
   setActiveInitialSolveQ,
   setActiveReflectionQ,
-  setActiveNotesQ,
+  navigate,
 }) {
   const { questions, updateProgress } = useAppStore(
     useShallow((state) => ({
@@ -76,9 +76,13 @@ export function useModalHandlers({
   );
 
   /**
-   * handleOpenNotes — simply sets which question's notes modal is open.
+   * handleOpenNotes — routes the user to the dedicated Note Page.
    */
-  const handleOpenNotes = useCallback((q) => setActiveNotesQ(q), [setActiveNotesQ]);
+  const handleOpenNotes = useCallback((q) => {
+    if (navigate) {
+      navigate(`/notes/${q.id}`);
+    }
+  }, [navigate]);
 
   return { handleSaveInitialSolve, handleSaveReflection, handleOpenNotes };
 }

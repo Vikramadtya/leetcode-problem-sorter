@@ -1,32 +1,40 @@
 import { z } from 'zod';
 
-export const ProgressSchema = z.object({
-  id: z.string().optional(),
-  question_id: z.string().optional(),
-  status: z.enum(['Solved', 'Attempted', 'Unsolved']).default('Unsolved'),
-  confidenceLevel: z.number().nullable().optional(),
-  needsRevision: z.boolean().default(false),
+const ProgressSchema = z.object({
+  status: z.enum(['Unsolved', 'Attempted', 'Solved']).default('Unsolved'),
+  dateSolved: z.string().nullable().optional(),
+  confidenceLevel: z.number().min(1).max(5).nullable().optional(),
+  nextRevisionDate: z.string().nullable().optional(),
+  revise: z.boolean().default(false),
+  attempts: z.number().default(0),
+  timeSpent: z.number().nullable().optional(),
   notes: z.string().nullable().optional(),
-  last_practiced: z.string().nullable().optional(),
-  next_review_date: z.string().nullable().optional(),
-}).passthrough();
-
-export const QuestionSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  difficulty: z.enum(['Easy', 'Medium', 'Hard']).optional().nullable(),
-  url: z.string().optional().nullable(),
-  platform: z.string().optional().nullable(),
   tags: z.array(z.string()).default([]),
-  pattern: z.string().optional().nullable(),
-  progress: ProgressSchema.nullable().optional(),
+  pattern: z.string().nullable().optional(),
+  solutionLink: z.string().nullable().optional(),
+  important: z.boolean().default(false),
+});
+
+const QuestionSchema = z.object({
+  id: z.string(),
+  platformId: z.string().or(z.number()).nullable().optional(),
+  platform: z.string().nullable().optional(),
+  title: z.string(),
+  difficulty: z.string(),
+  url: z.string(),
+  companies: z.array(z.string()).default([]),
+  acceptanceRate: z.number().nullable().optional(),
+  frequency: z.number().nullable().optional(),
+  isCustom: z.boolean().optional(),
+  commentsCount: z.number().optional(),
+  progress: ProgressSchema.optional(),
 }).passthrough();
 
 export const QuestionsResponseSchema = z.object({
   data: z.array(QuestionSchema),
-  total: z.number(),
+  totalCount: z.number(),
   page: z.number(),
-  limit: z.number(),
+  totalPages: z.number(),
 });
 
 export const AnalyticsSchema = z.object({

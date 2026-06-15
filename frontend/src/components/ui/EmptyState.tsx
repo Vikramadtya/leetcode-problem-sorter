@@ -22,7 +22,19 @@ export default function EmptyState({
   onAction,
   icon = '⚠️',
 }) {
-  const isError = icon.includes('⚠️') || message.toLowerCase().includes('error');
+  const isError = icon.includes('⚠️') || (typeof message === 'string' && message.toLowerCase().includes('error'));
+
+  let displayMessage = message;
+  let isJsonError = false;
+  if (typeof message === 'string' && (message.trim().startsWith('[') || message.trim().startsWith('{'))) {
+    try {
+      const parsed = JSON.parse(message);
+      displayMessage = JSON.stringify(parsed, null, 2);
+      isJsonError = true;
+    } catch (e) {
+      // not valid JSON, leave as is
+    }
+  }
 
   return (
     <div className={styles.emptyStateContainer} role="status" aria-live="polite">
@@ -48,7 +60,13 @@ export default function EmptyState({
           )}
         </div>
 
-        <h3 className={styles.message}>{message}</h3>
+        {isJsonError ? (
+          <pre className={styles.errorCodeBlock}>
+            <code>{displayMessage}</code>
+          </pre>
+        ) : (
+          <h3 className={styles.message}>{displayMessage}</h3>
+        )}
 
         {subtext && <p className={styles.subtext}>{subtext}</p>}
 

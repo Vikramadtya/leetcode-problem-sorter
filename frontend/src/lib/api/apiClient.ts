@@ -9,7 +9,7 @@ export const setAccessToken = (token) => {
   inMemoryToken = token;
 };
 
-const API_BASE = import.meta.env?.VITE_API_URL || config.api.endpoint;
+const API_BASE = config.api.endpoint;
 const TIMEOUT_MS = config.api.timeoutMs || 10000;
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
@@ -244,6 +244,27 @@ class ApiClient {
   }
 
   // ── Questions ─────────────────────────────────────────────────────────
+
+  async getQuestionById(id: string) {
+    try {
+      const url = `${API_BASE}/questions/${id}`;
+      const headers = await this.getHeaders();
+      const res = await fetchWithRetry(url, { headers });
+      
+      if (res.status === 401) {
+        this._handle401();
+        return null;
+      }
+      if (!res.ok) throw new Error(await parseError(res));
+      const json = await res.json();
+      return json;
+    } catch (error: any) {
+      const msg = error.details ? JSON.stringify(error.details, null, 2) : error.message;
+      logger.error(`[API] getQuestionById (${id}):`, msg);
+      toast.error('Failed to fetch question details');
+      throw error;
+    }
+  }
 
   /**
    * GET /questions — cancels any in-flight request when called again.
@@ -545,7 +566,7 @@ class ApiClient {
     logger.warn('[API] 401 Unauthorized — redirecting to sign-in');
     toast.error('Session expired. Please sign in again.');
     if (typeof window !== 'undefined') {
-      window.location.href = '/api/auth/signin';
+      window.location.href = '/';
     }
   }
 

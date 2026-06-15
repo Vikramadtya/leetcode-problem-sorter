@@ -104,7 +104,7 @@ components:
           example: "550e8400-e29b-41d4-a716-446655440000"
         platformId:
           type: string
-          description: Platform-specific question identifier (e.g., numeric string for LeetCode)
+          description: Platform-specific question identifier. The combination of (platform + platformId) must be globally unique across the database.
           example: "1"
           minLength: 1
         platform:
@@ -127,9 +127,11 @@ components:
           enum: [Easy, Medium, Hard]
           example: Easy
         acceptanceRate:
-          type: string
-          description: Acceptance rate as a formatted string
-          example: "57.5%"
+          type: number
+          format: float
+          nullable: true
+          description: Acceptance rate as a numeric percentage
+          example: 57.5
         frequency:
           type: number
           format: float
@@ -1346,6 +1348,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — A question with the same platform and platformId already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /patterns:
     get:
@@ -1497,6 +1505,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /questions/{id}:
+    get:
+      operationId: getQuestionById
+      tags: [Questions]
+      summary: Get details of a single question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  question:
+                    $ref: '#/components/schemas/QuestionWithProgress'
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
 
   /questions/{id}/comments:
     get:

@@ -80,7 +80,11 @@ function formatQuestion(row) {
     title: row.title,
     url: row.url,
     difficulty: row.difficulty,
-    acceptanceRate: row.acceptanceRate,
+    acceptanceRate: (() => {
+      if (row.acceptanceRate == null) return null;
+      const num = parseFloat(String(row.acceptanceRate).replace('%', ''));
+      return isNaN(num) ? null : num;
+    })(),
     frequency: row.frequency,
     companies: companies,
     isCustom: !!row.isCustom,
@@ -183,6 +187,33 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // ============================================================
+// GET /api/v1/questions/:id
+// ============================================================
+app.get('/api/v1/questions/:id', (req, res) => {
+  const qId = req.params.id;
+  const sql = `
+    SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important,
+    q.frequency as frequency,
+    (SELECT json_group_array(DISTINCT company_slug) FROM question_company_frequencies WHERE question_id = q.uuid) as companies,
+    (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags,
+    (SELECT COUNT(*) FROM comments c WHERE c.question_id = q.uuid) as commentsCount
+    FROM questions q
+    LEFT JOIN progress p ON q.uuid = p.id
+    WHERE q.uuid = ?
+  `;
+  try {
+    const row = db.prepare(sql).get(qId);
+    if (!row) return res.status(404).json({ error: 'Question not found' });
+    
+    res.json({
+      question: formatQuestion(row)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
 // GET /api/v1/questions
 // ============================================================
 app.get('/api/v1/questions', (req, res) => {
@@ -215,7 +246,7 @@ app.get('/api/v1/questions', (req, res) => {
     SELECT q.*, p.status, p.dateSolved, p.confidenceLevel, p.nextRevisionDate, p.revise, p.attempts, p.timeSpent, p.notes, p.pattern, p.solutionLink, p.important,
     ${companyField} as frequency,
     (SELECT json_group_array(DISTINCT company_slug) FROM question_company_frequencies WHERE question_id = q.uuid) as companies,
-    (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags,
+    (SELECT json_group_array(tg.name) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags,
     (SELECT COUNT(*) FROM comments c WHERE c.question_id = q.uuid) as commentsCount
     FROM questions q
     LEFT JOIN progress p ON q.uuid = p.id
@@ -228,7 +259,7 @@ app.get('/api/v1/questions', (req, res) => {
   }
 
   if (p.trackerMode === 'true') {
-    conditions.push(`(p.status IN ('Solved', 'Attempted') OR p.important = 1 OR p.revise = 1 OR p.attempts > 0 OR q.isCustom = 1)`);
+    conditions.push(`(p.status IN ('Solved', 'Attempted') OR p.important = 1 OR p.revise = 1 OR p.attempts > 0)`);
   }
 
   if (p.search) {
@@ -305,7 +336,7 @@ app.get('/api/v1/questions', (req, res) => {
   const rows = db.prepare(selectQuery).all(...params);
   const data = rows.map(formatQuestion);
 
-  res.json({ data, total: totalCount, page, limit });
+  res.json({ data, totalCount, page, totalPages });
 });
 
 // ============================================================
@@ -313,7 +344,7 @@ app.get('/api/v1/questions', (req, res) => {
 // ============================================================
 app.get('/api/v1/progress/:id', (req, res) => {
   const row = db.prepare(`
-    SELECT p.*, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags
+    SELECT p.*, (SELECT json_group_array(tg.name) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags
     FROM progress p WHERE id = ?
   `).get(req.params.id);
 
@@ -339,7 +370,7 @@ app.patch('/api/v1/progress/:id', (req, res) => {
 
   upsertProgress(id, updates);
   
-  const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
+  const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(tg.name) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
   updated.tags = parseJSON(updated.tags);
   res.json(formatQuestion(updated).progress);
 });
@@ -364,7 +395,7 @@ app.post('/api/v1/progress/bulk', (req, res) => {
       if (!qExists) { skipped++; continue; }
 
       upsertProgress(id, fields);
-      const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(json_object('id', tg.id, 'name', tg.name, 'description', tg.description)) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
+      const updated = db.prepare(`SELECT p.*, (SELECT json_group_array(tg.name) FROM progress_tags pt JOIN tags tg ON pt.tag_id = tg.id WHERE pt.progress_id = p.id) as tags FROM progress p WHERE id = ?`).get(id);
       updated.tags = parseJSON(updated.tags);
       results.push({ id, progress: formatQuestion(updated).progress });
     }
@@ -963,10 +994,17 @@ app.post('/api/v1/custom-questions', (req, res) => {
   const difficulty = req.body.difficulty || 'Medium';
   const diffLower = difficulty.toLowerCase();
 
-  db.prepare(`
-    INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '-', 0, 1)
-  `).run(uuid, platformId, platform, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower);
+  try {
+    db.prepare(`
+      INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '-', 0, 1)
+    `).run(uuid, platformId, platform, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower);
+  } catch (err) {
+    if (err.message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ code: 409, message: 'A question with this platform and ID already exists.' });
+    }
+    throw err;
+  }
 
   const confidenceLevel = req.body.confidenceLevel || null;
   const isSolved = !!confidenceLevel;

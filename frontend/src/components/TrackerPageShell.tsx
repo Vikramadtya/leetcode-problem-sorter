@@ -23,7 +23,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 
 import { apiClient } from '../lib/api/apiClient';
@@ -38,11 +38,9 @@ import StatsBar from './StatsBar';
 import Heatmap from './Heatmap';
 import Table from './Table';
 import ReflectionModal from './ReflectionModal';
-import NotesModal from './NotesModal';
-import InitialSolveModal from './InitialSolveModal';
+import ActiveAttemptModal from './ActiveAttemptModal';
 import WrapUpModal from './WrapUpModal';
 import FlashcardMode from './FlashcardMode';
-import ActiveAttemptModal from './ActiveAttemptModal';
 import FloatingGoalWidget from './FloatingGoalWidget';
 import MiniInsights from './MiniInsights';
 import ProblemFilterToolbar from './ProblemFilterToolbar';
@@ -97,7 +95,7 @@ export default function TrackerPageShell({
   );
 
   // ── Local modal state ──────────────────────────────────────────────────────
-  const [activeNotesQ, setActiveNotesQ] = useState(null);
+  const navigate = useNavigate();
   const [activeCommentQ, setActiveCommentQ] = useState(null);
   const [activeReflectionQ, setActiveReflectionQ] = useState(null);
   const [activeInitialSolveQ, setActiveInitialSolveQ] = useState(null);
@@ -129,7 +127,6 @@ export default function TrackerPageShell({
 
   // ── Close all modals (bound to Escape key via usePageInit) ─────────────────
   const closeAllModals = useCallback(() => {
-    setActiveNotesQ(null);
     setActiveReflectionQ(null);
     setActiveInitialSolveQ(null);
     setActiveAttemptQ(null);
@@ -140,17 +137,10 @@ export default function TrackerPageShell({
   usePageInit(mode, { onEscape: closeAllModals });
 
   // ── Modal handlers (solve, reflection, notes-open) ─────────────────────────
-  const {
-    handleCloseNotes,
-    handleSaveNotes,
-    handleCloseReflection,
-    handleSaveReflection,
-    handleCloseInitialSolve,
-    handleSaveInitialSolve,
-  } = useModalHandlers({
-    setActiveNotesQ,
-    setActiveReflectionQ,
+  const { handleSaveInitialSolve, handleSaveReflection, handleOpenNotes } = useModalHandlers({
     setActiveInitialSolveQ,
+    setActiveReflectionQ,
+    navigate,
   });
 
   const handleAttemptFailed = useCallback(
@@ -369,7 +359,7 @@ export default function TrackerPageShell({
           <Table
             onOpenReflection={setActiveReflectionQ}
             onOpenInitialSolve={setActiveInitialSolveQ}
-            onOpenNotes={setActiveNotesQ}
+            onOpenNotes={handleOpenNotes}
             onOpenComments={setActiveCommentQ}
             onOpenAttempt={setActiveAttemptQ}
             authEnabled={authEnabled}
@@ -395,13 +385,6 @@ export default function TrackerPageShell({
           patterns={patterns}
           onClose={() => setActiveInitialSolveQ(null)}
           onSave={handleSaveInitialSolve}
-        />
-      )}
-      {activeNotesQ && (
-        <NotesModal
-          question={activeNotesQ}
-          onClose={() => setActiveNotesQ(null)}
-          onSave={handleSaveNotes}
         />
       )}
       {activeCommentQ && (
