@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useAppStore } from '../store/useAppStore';
+import { getDaysDifference } from '../lib/dateUtils';
 
 import styles from './Table.module.css';
 
@@ -29,8 +30,6 @@ const formatTime = (seconds) => {
 
 /** Capitalize first letter of each word (for company slug display) */
 const capitalizeSlug = (slug) => slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-// removed useTimers
 
 // ─── Table component ──────────────────────────────────────────────────────
 
@@ -396,11 +395,7 @@ function Table({
                       {/* SRS badge */}
                       {prog.nextRevisionDate &&
                         (() => {
-                          const nextDate = new Date(prog.nextRevisionDate);
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          nextDate.setHours(0, 0, 0, 0);
-                          const diffDays = Math.round((nextDate - today) / 86400000);
+                          const diffDays = getDaysDifference(prog.nextRevisionDate);
                           let badgeClass = styles.srsUpcoming;
                           let text = `IN ${diffDays}d`;
                           if (diffDays < 0) {

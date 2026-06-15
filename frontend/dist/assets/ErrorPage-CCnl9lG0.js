@@ -1,0 +1,6 @@
+import{j as e,L as s}from"./index-_O1w7NRj.js";import{c as t}from"./createLucideIcon-Cx5aaiC4.js";/**
+ * @license lucide-react v1.18.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const n=[["path",{d:"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8",key:"5wwlr5"}],["path",{d:"M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",key:"r6nss1"}]],r=t("house",n),c="_container_p3ves_1",a="_glow_p3ves_14",i="_content_p3ves_26",l="_errorCode_p3ves_32",d="_title_p3ves_43",_="_description_p3ves_51",p="_homeBtn_p3ves_59",o={container:c,glow:a,content:i,errorCode:l,title:d,description:_,homeBtn:p};function v(){return e.jsxs("div",{className:o.container,children:[e.jsx("div",{className:o.glow}),e.jsxs("div",{className:o.content,children:[e.jsx("h1",{className:o.errorCode,children:"404"}),e.jsx("h2",{className:o.title,children:"Page Not Found"}),e.jsx("p",{className:o.description,children:"The page you are looking for doesn't exist or has been moved. Let's get you back on track."}),e.jsxs(s,{to:"/",className:o.homeBtn,children:[e.jsx(r,{size:18}),"Return Home"]})]})]})}export{v as default};

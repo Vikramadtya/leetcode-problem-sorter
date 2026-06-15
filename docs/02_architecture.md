@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                  Browser (Next.js 16)                   │
+│                  Browser (Vite + React 19)                   │
 │                                                         │
 │  ┌────────────┐  ┌──────────────┐  ┌────────────────┐  │
 │  │  Tracker   │  │   Explore    │  │   Dashboard    │  │
@@ -44,8 +44,8 @@
               └──────────────┬─────────────────┘
                              │
               ┌──────────────▼─────────────────┐
-              │  global_questions.json (5 MB)   │
-              │  user_progress.json             │
+              │  SQLite tacker.db (5 MB)   │
+              │  SQLite tacker.db (progress table)             │
               └─────────────────────────────────┘
 
               ┌─────────────────────────────────┐
@@ -59,7 +59,7 @@
 
 ## Layer Responsibilities
 
-### Frontend (Next.js)
+### Frontend (Vite)
 | Responsibility | Details |
 |---------------|---------|
 | Render data | Maps `store.questions[]` → table rows. Zero filtering. |
@@ -75,7 +75,7 @@
 | Business rules | SRS calculation, date stamping, status resets |
 | Analytics | Streak, heatmap, pattern mastery — cached and lazily recomputed |
 | Contract enforcement | `express-openapi-validator` rejects any request/response deviating from `openapi.yaml` |
-| Persistence | Writes `user_progress.json` on every PATCH |
+| Persistence | Writes `SQLite tacker.db (progress table)` on every PATCH |
 
 ### OpenAPI Contract (`/api-contract/openapi.yaml`)
 - **Version 2.0.0**
@@ -127,7 +127,7 @@
    a. Detects status='Solved'
    b. stamps dateSolved = new Date().toISOString()
    c. calcNextRevisionDate(3) → today + 7 days
-   d. Merges, saves to progressMap + user_progress.json
+   d. Merges, saves to progressMap + SQLite tacker.db (progress table)
    e. Invalidates analyticsCache
    f. Returns full ProgressData object
 9. store: replaces local progress with server response

@@ -2,7 +2,15 @@ import { toast } from 'sonner';
 
 import config from '../../config.json';
 import { logger } from '../logger';
-import { QuestionsResponseSchema, AnalyticsSchema, SettingsSchema } from './schemas';
+import { z } from 'zod';
+import { 
+  QuestionsResponseSchema, 
+  AnalyticsSchema, 
+  SettingsSchema, 
+  CommentSchema, 
+  UtilitiesSchema, 
+  CompanySchema 
+} from './schemas';
 
 let inMemoryToken = null;
 export const setAccessToken = (token) => {
@@ -130,7 +138,7 @@ class ApiClient {
       }
       if (!res.ok) throw new Error(await parseError(res));
       const json = await res.json();
-      return json.comments || [];
+      return z.array(CommentSchema).parse(json.comments || []);
     } catch (error) {
       logger.error('[API] getComments:', error);
       toast.error('Failed to load comments');
@@ -213,7 +221,8 @@ class ApiClient {
         throw new Error('Unauthorized');
       }
       if (!res.ok) throw new Error(await parseError(res));
-      return await res.json();
+      const json = await res.json();
+      return z.array(CommentSchema).parse(json);
     } catch (error) {
       logger.error('[API] getAllComments:', error);
       toast.error('Failed to fetch comments');

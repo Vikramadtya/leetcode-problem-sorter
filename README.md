@@ -11,7 +11,7 @@ Tacker is a personal LeetCode interview-preparation tracker. It lets you:
 - Revise solved problems on a smart SRS schedule (confidence 1–4 → 1/3/7/14 day intervals)
 - Filter by 654 companies, difficulty, pattern, tag, and more
 - View analytics: streaks, heatmaps, difficulty breakdown, pattern mastery, avg solve time
-- Add custom questions from any platform (HackerRank, Codeforces, etc.)
+- Add custom questions and System Design questions from any platform
 
 ---
 
@@ -42,7 +42,7 @@ problem-sorter/
 ├── api-contract/
 │   └── openapi.yaml              ← The source of truth for ALL API shapes (v2.0.0)
 ├── docs/                         ← Full documentation (start with docs/00_README.md)
-├── frontend/                     ← Next.js 16 Frontend (Tacker UI)
+├── frontend/                     ← Vite + React 19 Frontend (Tacker UI)
 │   └── src/
 │       ├── app/                  ← Pages: Tracker, Explore, Dashboard, Add
 │       ├── store/useAppStore.js  ← Zustand global state
@@ -51,8 +51,8 @@ problem-sorter/
 ├── mock-server/
 │   ├── server.js                 ← Express API — all business logic, SRS, analytics
 │   └── data/
-│       ├── global_questions.json ← 3,358 LeetCode questions + 654 companies
-│       └── user_progress.json    ← User progress records (written on every update)
+│       ├── SQLite tacker.db ← 3,358 LeetCode questions + 654 companies
+│       └── SQLite tacker.db (progress table)    ← User progress records (written on every update)
 ├── backend/                      ← Java Micronaut (future production backend, skeleton only)
 ├── Makefile                      ← make dev | make mock | make frontend
 └── README.md
@@ -116,7 +116,7 @@ Analytics are computed once and cached. Any `PATCH /progress/:id` invalidates th
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Next.js 16, React 18, Zustand, Vanilla CSS |
+| Frontend | Vite + React 19, React 18, Zustand, Vanilla CSS |
 | Mock Server | Node.js, Express 5, express-openapi-validator |
 | Backend (future) | Java Micronaut, JOOQ, PostgreSQL |
 | Auth | NextAuth.js (Google OAuth) |

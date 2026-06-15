@@ -23,6 +23,7 @@ const queryClient = new QueryClient({
 
 // Lazy loaded pages
 const Tracker = lazy(() => import('./pages/Tracker'));
+const SystemDesign = lazy(() => import('./pages/SystemDesign'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Explore = lazy(() => import('./pages/Explore'));
 const Configuration = lazy(() => import('./pages/Configuration'));
@@ -98,6 +99,14 @@ export default function App() {
                         element={
                           <AuthGuard>
                             <Explore />
+                          </AuthGuard>
+                        }
+                      />
+                      <Route
+                        path="/system-design"
+                        element={
+                          <AuthGuard>
+                            <SystemDesign />
                           </AuthGuard>
                         }
                       />

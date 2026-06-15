@@ -11,25 +11,70 @@ import styles from './Header.module.css';
 
 const APP_NAME = config.app.name;
 
+function NavDropdown({ authEnabled, session, pathname }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const close = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const isCodingActive = pathname === '/' || pathname === '/explore' || pathname === '/dashboard';
+
+  return (
+    <div className={styles.navDropdownWrapper} ref={ref}>
+      <button 
+        className={`${styles.navDropdownBtn} ${isCodingActive ? styles.active : ''}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Coding
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      {open && (
+        <div className={styles.navDropdownMenu}>
+          <Link to="/" className={`${styles.navLink} ${pathname === '/' ? styles.active : ''}`} onClick={() => setOpen(false)}>
+            Tracker
+          </Link>
+          <Link
+            to="/explore"
+            className={`${styles.navLink} ${pathname === '/explore' ? styles.active : ''}`}
+            onClick={() => setOpen(false)}
+          >
+            Explore
+          </Link>
+          {authEnabled && session && (
+            <Link
+              to="/dashboard"
+              className={`${styles.navLink} ${pathname === '/dashboard' ? styles.active : ''}`}
+              onClick={() => setOpen(false)}
+            >
+              Dashboard
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavLinks({ authEnabled, session, pathname }) {
   return (
     <nav className={styles.nav} aria-label="Main navigation">
-      <Link to="/" className={`${styles.navLink} ${pathname === '/' ? styles.active : ''}`}>
-        Tracker
-      </Link>
-      <Link
-        to="/explore"
-        className={`${styles.navLink} ${pathname === '/explore' ? styles.active : ''}`}
-      >
-        Explore
-      </Link>
+      <NavDropdown authEnabled={authEnabled} session={session} pathname={pathname} />
+      
       {authEnabled && session && (
         <>
           <Link
-            to="/dashboard"
-            className={`${styles.navLink} ${pathname === '/dashboard' ? styles.active : ''}`}
+            to="/system-design"
+            className={`${styles.navLink} ${pathname === '/system-design' ? styles.active : ''}`}
           >
-            Dashboard
+            System Design
           </Link>
           <Link
             to="/configuration"

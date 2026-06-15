@@ -3,6 +3,7 @@ import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 
 import { useAppStore } from '../store/useAppStore';
+import { calculateGoalsProgress, calculateDifficultyPercentages, getGoalEmoji } from '../lib/statsUtils';
 
 import styles from './MiniInsights.module.css';
 
@@ -32,14 +33,7 @@ function MiniInsights({
   const settings = useAppStore((state) => state.settings);
 
   // 3. Goals
-  const DAILY_GOAL = parseInt(settings?.dailyGoal || '2', 10);
-  const WEEKLY_GOAL = parseInt(settings?.weeklyGoal || '10', 10);
-
-  const dailyCount = stats.dailyCount || 0;
-  const weeklyCount = stats.weeklyCount || 0;
-
-  const dailyPercent = Math.min(100, Math.round((dailyCount / DAILY_GOAL) * 100));
-  const weeklyPercent = Math.min(100, Math.round((weeklyCount / WEEKLY_GOAL) * 100));
+  const { dailyGoal, weeklyGoal, dailyCount, weeklyCount, dailyPercent, weeklyPercent } = calculateGoalsProgress(stats, settings);
 
   const { width, height } = useWindowSize();
   const [showConfetti, setShowConfetti] = useState(false);
@@ -52,23 +46,8 @@ function MiniInsights({
     }
   }, [dailyPercent, dailyCount]);
 
-  // Determine Emojis based on progress
-  const getEmoji = (percent) => {
-    if (percent >= 100) return '🎉'; // Celebration
-    if (percent >= 50) return '😄'; // Happy
-    if (percent > 0) return '🙂'; // Slight smile
-    return '😢'; // Sad (0%)
-  };
-
   // 4. Difficulty Breakdown
-  const easy = stats.easy || 0;
-  const medium = stats.medium || 0;
-  const hard = stats.hard || 0;
-  const totalDiff = easy + medium + hard || 1; // avoid /0
-
-  const easyPct = (easy / totalDiff) * 100;
-  const medPct = (medium / totalDiff) * 100;
-  const hardPct = (hard / totalDiff) * 100;
+  const { easy, medium, hard, easyPct, medPct, hardPct } = calculateDifficultyPercentages(stats);
 
   // 5. Top Patterns (from backend)
   // topPatterns is passed as prop
@@ -140,12 +119,12 @@ function MiniInsights({
         {/* ── 3. Daily Goal ── */}
         <div className={styles.widget}>
           <div className={styles.widgetHeader}>
-            <span aria-hidden="true">{getEmoji(dailyPercent)}</span> Daily Goal
+            <span aria-hidden="true">{getGoalEmoji(dailyPercent)}</span> Daily Goal
           </div>
           <div className={styles.widgetContent}>
             <div className={styles.goalHeader}>
               <div className={styles.goalCount}>{dailyCount}</div>
-              <div className={styles.goalTarget}>/ {DAILY_GOAL} problems</div>
+              <div className={styles.goalTarget}>/ {dailyGoal} problems</div>
             </div>
             <div className={styles.progressBarBg}>
               <div
@@ -160,12 +139,12 @@ function MiniInsights({
         {/* ── 4. Weekly Goal ── */}
         <div className={styles.widget}>
           <div className={styles.widgetHeader}>
-            <span aria-hidden="true">{getEmoji(weeklyPercent)}</span> Weekly Goal
+            <span aria-hidden="true">{getGoalEmoji(weeklyPercent)}</span> Weekly Goal
           </div>
           <div className={styles.widgetContent}>
             <div className={styles.goalHeader}>
               <div className={styles.goalCount}>{weeklyCount}</div>
-              <div className={styles.goalTarget}>/ {WEEKLY_GOAL} problems</div>
+              <div className={styles.goalTarget}>/ {weeklyGoal} problems</div>
             </div>
             <div className={styles.progressBarBg}>
               <div

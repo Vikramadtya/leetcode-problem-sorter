@@ -41,7 +41,7 @@ Every request is validated against the OpenAPI spec. Invalid requests → 400 wi
 
 ## In-Memory Data Structures
 
-All data structures are built once at startup from JSON files. No disk reads during request handling (except progress saves on PATCH).
+All data structures are built once at startup from SQLite database. No disk reads during request handling (except progress saves on PATCH).
 
 ### `questionMap` — `Map<id, Question>`
 ```js
@@ -78,7 +78,7 @@ difficultyIndex.get("hard")   // → Set of 758 IDs
 
 ### `progressMap` — `Map<questionId, ProgressRecord>`
 ```js
-// Loaded from user_progress.json at startup, written on every PATCH
+// Loaded from SQLite tacker.db (progress table) at startup, written on every PATCH
 progressMap.get("1")
 // → { status: "Solved", dateSolved: "...", confidenceLevel: 3,
 //     nextRevisionDate: "...", revise: false, attempts: 2,
@@ -100,7 +100,7 @@ analyticsCache = null;
 
 ```
 1. loadGlobalQuestions()
-   ├── Read global_questions.json (~5MB, 51K lines)
+   ├── Read SQLite tacker.db (~5MB, 51K lines)
    ├── For each question:
    │   ├── Parse ID, title, difficulty, acceptanceRate, frequency, URL, companies
    │   ├── Pre-compute: titleLower, diffLower, frequency (float)
@@ -111,7 +111,7 @@ analyticsCache = null;
    └── Sort questionList by numeric ID ascending
 
 2. loadProgress()
-   ├── Read user_progress.json
+   ├── Read SQLite tacker.db (progress table)
    ├── For each entry: migrate legacy comma-string tags → array
    └── Populate progressMap
 
@@ -221,7 +221,7 @@ if (updates.status === 'Unsolved') {
 
 progressMap.set(id, newProgress)
 invalidateAnalyticsCache()  // set analyticsCache = null
-saveProgress()              // write user_progress.json to disk
+saveProgress()              // write SQLite tacker.db (progress table) to disk
 res.json(formatProgress(newProgress))  // return FULL progress object
 ```
 
@@ -312,13 +312,13 @@ if (typeof p.tags === 'string') {
 
 ## Data Files
 
-### `mock-server/data/global_questions.json`
+### `mock-server/data/SQLite tacker.db`
 - ~5MB, ~51K lines
 - Object keyed by question ID
 - Updated by `frontend/scripts/fetch-data.js` which pulls from GitHub (`Vikramadtya/leetcode-companywise-interview-questions`)
 - Never modified by the mock server
 
-### `mock-server/data/user_progress.json`
+### `mock-server/data/SQLite tacker.db (progress table)`
 - Written on every PATCH and POST /progress/bulk
 - Object keyed by question ID
 - Only contains questions the user has interacted with

@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 
 import { useAppStore } from '../store/useAppStore';
 
-export default function FloatingGoalWidget() {
+export default function FloatingGoalWidget({ mode }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const dailyCount = useAppStore((state) => state.stats.dailyCount) || 0;
-  const weeklyCount = useAppStore((state) => state.stats.weeklyCount) || 0;
+  const isSD = mode === 'system-design-tracker';
 
-  const dailyGoal = parseInt(useAppStore((state) => state.settings.dailyGoal) || '2', 10);
-  const weeklyGoal = parseInt(useAppStore((state) => state.settings.weeklyGoal) || '10', 10);
+  const dailyCount = useAppStore((state) => isSD ? state.stats.sdDailyCount : state.stats.dailyCount) || 0;
+  const weeklyCount = useAppStore((state) => isSD ? state.stats.sdWeeklyCount : state.stats.weeklyCount) || 0;
+
+  const dailyGoal = parseInt(useAppStore((state) => isSD ? state.settings.sdDailyGoal : state.settings.dailyGoal) || (isSD ? '1' : '2'), 10);
+  const weeklyGoal = parseInt(useAppStore((state) => isSD ? state.settings.sdWeeklyGoal : state.settings.weeklyGoal) || (isSD ? '3' : '10'), 10);
 
   const dailyPercent = Math.min(100, Math.round((dailyCount / dailyGoal) * 100));
   const weeklyPercent = Math.min(100, Math.round((weeklyCount / weeklyGoal) * 100));

@@ -67,7 +67,7 @@ function normalizeTags(incoming, existing = []) {
 }
 
 function parseJSON(str) {
-  try { return JSON.parse(str); } catch { return []; }
+  try { return JSON.parse(str); } catch (err) { console.error('[parseJSON error]:', err); return []; }
 }
 
 function formatQuestion(row) {
@@ -88,6 +88,7 @@ function formatQuestion(row) {
     frequency: row.frequency,
     companies: companies,
     isCustom: !!row.isCustom,
+    type: row.type || 'coding',
     commentsCount: row.commentsCount || 0,
     progress: {
       status: row.status || 'Unsolved',
@@ -126,6 +127,7 @@ app.post('/api/auth/login', async (req, res) => {
       userPicture = data.picture;
       userId = data.sub;
     } catch (err) {
+      console.error('[Login Error] Google token verification failed:', err);
       return res.status(401).json({ error: 'Invalid Google token' });
     }
   } else {
@@ -209,6 +211,7 @@ app.get('/api/v1/questions/:id', (req, res) => {
       question: formatQuestion(row)
     });
   } catch (err) {
+    console.error('[GET /api/v1/questions/:id error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -257,6 +260,10 @@ app.get('/api/v1/questions', (req, res) => {
     conditions.push(`q.diffLower = ?`);
     params.push(p.difficulty.toLowerCase());
   }
+
+  const typeFilter = p.type || 'coding';
+  conditions.push(`q.type = ?`);
+  params.push(typeFilter);
 
   if (p.trackerMode === 'true') {
     conditions.push(`(p.status IN ('Solved', 'Attempted') OR p.important = 1 OR p.revise = 1 OR p.attempts > 0)`);
@@ -501,14 +508,15 @@ function computeAnalytics() {
       COUNT(CASE WHEN p.status = 'Attempted' THEN 1 END) as totalAttempted,
       COUNT(CASE WHEN p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now')) THEN 1 END) as totalRevise,
       COUNT(CASE WHEN p.important = 1 THEN 1 END) as totalFavourite,
-      (SELECT COUNT(*) FROM questions) as totalQuestions
-    FROM progress p
+      COUNT(*) as totalQuestions
+    FROM progress p JOIN questions q ON p.id = q.uuid
+    WHERE q.type = 'coding'
   `).get();
 
   const difficultyRows = db.prepare(`
     SELECT q.difficulty, COUNT(*) as count, SUM(p.timeSpent) as timeSpent
     FROM progress p JOIN questions q ON p.id = q.uuid
-    WHERE p.status = 'Solved'
+    WHERE p.status = 'Solved' AND q.type = 'coding'
     GROUP BY q.difficulty
   `).all();
 
@@ -524,8 +532,8 @@ function computeAnalytics() {
   // Activity Timeline (daily counts)
   const activityRows = db.prepare(`
     SELECT date(dateSolved) as dateStr, COUNT(*) as count
-    FROM progress
-    WHERE status = 'Solved' AND dateSolved IS NOT NULL
+    FROM progress p JOIN questions q ON p.id = q.uuid
+    WHERE p.status = 'Solved' AND p.dateSolved IS NOT NULL AND q.type = 'coding'
     GROUP BY date(dateSolved)
     ORDER BY dateStr ASC
   `).all();
@@ -568,12 +576,22 @@ function computeAnalytics() {
   const weeklyCount = activityRows.filter(r => r.dateStr >= sevenAgoStr).reduce((acc, r) => acc + r.count, 0);
   const dailyCount = activityRows.filter(r => r.dateStr === todayStrCount).reduce((acc, r) => acc + r.count, 0);
 
+  const sdActivityRows = db.prepare(`
+    SELECT date(dateSolved) as dateStr, COUNT(*) as count
+    FROM progress p JOIN questions q ON p.id = q.uuid
+    WHERE p.status = 'Solved' AND p.dateSolved IS NOT NULL AND q.type = 'system-design'
+    GROUP BY date(dateSolved)
+  `).all();
+  const sdWeeklyCount = sdActivityRows.filter(r => r.dateStr >= sevenAgoStr).reduce((acc, r) => acc + r.count, 0);
+  const sdDailyCount = sdActivityRows.filter(r => r.dateStr === todayStrCount).reduce((acc, r) => acc + r.count, 0);
+
   // Top Companies
   const topCompanies = db.prepare(`
     SELECT qc.company_slug as name, COUNT(DISTINCT qc.question_id) as count
     FROM question_company_frequencies qc
     JOIN progress p ON qc.question_id = p.id
-    WHERE p.status = 'Solved'
+    JOIN questions q ON p.id = q.uuid
+    WHERE p.status = 'Solved' AND q.type = 'coding'
     GROUP BY qc.company_slug
     ORDER BY count DESC
     LIMIT 15
@@ -584,9 +602,9 @@ function computeAnalytics() {
     SELECT pattern as name, 
            COUNT(CASE WHEN status = 'Solved' THEN 1 END) as solved,
            COUNT(*) as total
-    FROM progress
-    WHERE pattern IS NOT NULL AND pattern != ''
-    GROUP BY pattern
+    FROM progress p JOIN questions q ON p.id = q.uuid
+    WHERE p.pattern IS NOT NULL AND p.pattern != '' AND q.type = 'coding'
+    GROUP BY p.pattern
     ORDER BY solved DESC
   `).all();
   
@@ -605,7 +623,8 @@ function computeAnalytics() {
     FROM progress_tags t
     JOIN progress p ON t.progress_id = p.id
     JOIN tags tg ON t.tag_id = tg.id
-    WHERE p.status = 'Solved'
+    JOIN questions q ON p.id = q.uuid
+    WHERE p.status = 'Solved' AND q.type = 'coding'
     GROUP BY tg.name
     ORDER BY count DESC
   `).all();
@@ -614,6 +633,9 @@ function computeAnalytics() {
     SELECT tg.name as name, COUNT(*) as count
     FROM progress_tags t
     JOIN tags tg ON t.tag_id = tg.id
+    JOIN progress p ON t.progress_id = p.id
+    JOIN questions q ON p.id = q.uuid
+    WHERE q.type = 'coding'
     GROUP BY tg.name
     ORDER BY count DESC
   `).all();
@@ -622,7 +644,7 @@ function computeAnalytics() {
   const confDiffRows = db.prepare(`
     SELECT q.difficulty, p.confidenceLevel, COUNT(*) as count
     FROM progress p JOIN questions q ON p.id = q.uuid
-    WHERE p.status = 'Solved' AND p.confidenceLevel IS NOT NULL
+    WHERE p.status = 'Solved' AND p.confidenceLevel IS NOT NULL AND q.type = 'coding'
     GROUP BY q.difficulty, p.confidenceLevel
   `).all();
   
@@ -638,7 +660,7 @@ function computeAnalytics() {
   const timeDiffRows = db.prepare(`
     SELECT date(p.dateSolved) as dateStr, q.difficulty, AVG(p.timeSpent) as avgTime
     FROM progress p JOIN questions q ON p.id = q.uuid
-    WHERE p.status = 'Solved' AND p.timeSpent > 0 AND p.dateSolved IS NOT NULL
+    WHERE p.status = 'Solved' AND p.timeSpent > 0 AND p.dateSolved IS NOT NULL AND q.type = 'coding'
     GROUP BY dateStr, q.difficulty
     ORDER BY dateStr ASC
   `).all();
@@ -653,25 +675,25 @@ function computeAnalytics() {
   // Patterns most revised
   const patternsMostRevised = db.prepare(`
     SELECT pattern as name, COUNT(*) as count
-    FROM progress
-    WHERE pattern IS NOT NULL AND pattern != '' AND (revise = 1 OR (nextRevisionDate IS NOT NULL AND datetime(nextRevisionDate) <= datetime('now')))
-    GROUP BY pattern
+    FROM progress p JOIN questions q ON p.id = q.uuid
+    WHERE p.pattern IS NOT NULL AND p.pattern != '' AND (p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))) AND q.type = 'coding'
+    GROUP BY p.pattern
     ORDER BY count DESC
   `).all();
 
   // Confidence to Problem count
   const confidenceToProblemCount = db.prepare(`
     SELECT confidenceLevel as level, COUNT(*) as count
-    FROM progress
-    WHERE status = 'Solved' AND confidenceLevel IS NOT NULL
-    GROUP BY confidenceLevel
+    FROM progress p JOIN questions q ON p.id = q.uuid
+    WHERE p.status = 'Solved' AND p.confidenceLevel IS NOT NULL AND q.type = 'coding'
+    GROUP BY p.confidenceLevel
     ORDER BY level ASC
   `).all();
 
   const revisionList = db.prepare(`
     SELECT q.uuid as id, q.title, q.difficulty, p.nextRevisionDate
     FROM progress p JOIN questions q ON p.id = q.uuid
-    WHERE p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))
+    WHERE (p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))) AND q.type = 'coding'
     ORDER BY p.nextRevisionDate ASC
     LIMIT 20
   `).all();
@@ -680,7 +702,7 @@ function computeAnalytics() {
   const recentActivity = db.prepare(`
     SELECT q.uuid as id, q.title, q.url, q.difficulty, p.dateSolved
     FROM progress p JOIN questions q ON p.id = q.uuid
-    WHERE p.status IN ('Solved', 'Attempted')
+    WHERE p.status IN ('Solved', 'Attempted') AND q.type = 'coding'
     ORDER BY p.dateSolved DESC
     LIMIT 3
   `).all();
@@ -689,7 +711,7 @@ function computeAnalytics() {
   const upcomingRevisions = db.prepare(`
     SELECT q.uuid as id, q.title, q.url, q.difficulty, p.nextRevisionDate
     FROM progress p JOIN questions q ON p.id = q.uuid
-    WHERE p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))
+    WHERE (p.revise = 1 OR (p.nextRevisionDate IS NOT NULL AND datetime(p.nextRevisionDate) <= datetime('now'))) AND q.type = 'coding'
     ORDER BY p.nextRevisionDate ASC
     LIMIT 3
   `).all();
@@ -715,6 +737,8 @@ function computeAnalytics() {
     maxStreak,
     weeklyCount,
     dailyCount,
+    sdWeeklyCount,
+    sdDailyCount,
     activityTimeline: problemsSolvedOverTime,
     calendar: problemsSolvedOverTime,
     problemsSolvedOverTime,
@@ -847,7 +871,7 @@ app.post('/api/v1/questions/:id/comments', (req, res) => {
 // ============================================================
 app.get('/api/v1/comments', (req, res) => {
   const comments = db.prepare(`
-    SELECT c.*, q.title as questionTitle, q.diffLower as questionDifficulty, q.url as questionUrl, q.platformId
+    SELECT c.*, q.title as questionTitle, q.diffLower as questionDifficulty, q.url as questionUrl, q.platformId, q.type as questionType
     FROM comments c
     JOIN questions q ON c.question_id = q.uuid
     ORDER BY c.created_at DESC
@@ -993,16 +1017,18 @@ app.post('/api/v1/custom-questions', (req, res) => {
   const platform = req.body.platform || 'Custom';
   const difficulty = req.body.difficulty || 'Medium';
   const diffLower = difficulty.toLowerCase();
+  const type = req.body.type || 'coding';
 
   try {
     db.prepare(`
-      INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '-', 0, 1)
-    `).run(uuid, platformId, platform, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower);
-  } catch (err) {
+      INSERT INTO questions (uuid, platformId, platform, title, titleLower, url, difficulty, diffLower, acceptanceRate, frequency, isCustom, type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '-', 0, 1, ?)
+    `).run(uuid, platformId, platform, req.body.title, req.body.title.toLowerCase(), req.body.link || '', difficulty, diffLower, type);
+    } catch (err) {
     if (err.message.includes('UNIQUE constraint failed')) {
       return res.status(409).json({ code: 409, message: 'A question with this platform and ID already exists.' });
     }
+    console.error('[POST /api/v1/custom-questions error]:', err);
     throw err;
   }
 

@@ -1,7 +1,7 @@
 # 05 — Frontend Guide
 
 ## Tech Stack
-- **Next.js 16** (App Router, `'use client'` components)
+- **Vite + React 19** (App Router, `'use client'` components)
 - **React 18** (Strict Mode — causes double-mount in dev; guarded by `useRef`)
 - **Zustand** — global state management
 - **Vanilla CSS Modules** — no TailwindCSS

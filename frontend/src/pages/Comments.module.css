@@ -8,6 +8,54 @@
 
 .header {
   margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.headerContent {
+  flex: 1;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.segmentedControl {
+  display: flex;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmentBtn {
+  background: transparent;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.segmentBtn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.activeSegment {
+  background: var(--bg-hover);
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .title {

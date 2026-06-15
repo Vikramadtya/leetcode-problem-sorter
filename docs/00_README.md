@@ -15,7 +15,7 @@ Tacker is a personal LeetCode interview-preparation tracker. It lets you log sol
 | [`02_architecture.md`](./02_architecture.md) | Full system architecture — monorepo, layers, data flow | ✅ Yes |
 | [`03_data_model.md`](./03_data_model.md) | Data shapes, JSON structures, PostgreSQL DDL | When writing BE code |
 | [`04_api_contract.md`](./04_api_contract.md) | Every API endpoint — params, request body, response schema | When calling/building APIs |
-| [`05_frontend_guide.md`](./05_frontend_guide.md) | Next.js pages, components, Zustand store, known bugs | When working on frontend |
+| [`05_frontend_guide.md`](./05_frontend_guide.md) | Vite pages, components, Zustand store, known bugs | When working on frontend |
 | [`06_mock_server_guide.md`](./06_mock_server_guide.md) | Mock server internals — indexes, business logic, SRS | When working on mock server |
 | [`07_known_issues_and_todos.md`](./07_known_issues_and_todos.md) | Current bugs, incomplete items, priority order | Start here if resuming |
 | [`design_doc.md`](./design_doc.md) | System design v2 — feature matrix, PostgreSQL schema | Reference |
@@ -65,7 +65,7 @@ If you find business logic in `frontend/`, it is a bug.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 16 (App Router), React 18, Zustand, Vanilla CSS |
+| Frontend | Vite + React 19 (App Router), React 18, Zustand, Vanilla CSS |
 | Mock Server (dev) | Node.js, Express 5, express-openapi-validator |
 | Backend (future) | Java Micronaut + JOOQ + PostgreSQL |
 | Auth | NextAuth.js (Google OAuth) |
@@ -99,8 +99,8 @@ problem-sorter/
 ├── mock-server/
 │   ├── server.js                 ← Express API (all business logic)
 │   ├── data/
-│   │   ├── global_questions.json ← 3,358 LeetCode questions + companies
-│   │   └── user_progress.json    ← User's progress records
+│   │   ├── SQLite tacker.db ← 3,358 LeetCode questions + companies
+│   │   └── SQLite tacker.db (progress table)    ← User's progress records
 │   └── package.json
 ├── backend/                      ← Java Micronaut (skeleton, not active)
 ├── Makefile                      ← make dev, make mock, make frontend

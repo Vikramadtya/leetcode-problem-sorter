@@ -27,6 +27,7 @@ db.exec(`
     acceptanceRate TEXT,
     frequency REAL,
     isCustom INTEGER DEFAULT 0,
+    type TEXT DEFAULT 'coding',
     UNIQUE(platformId, platform)
   );
 
@@ -97,7 +98,7 @@ db.exec(`
     email TEXT,
     phone TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT
   );
   
   -- Create indexes for performance
@@ -296,5 +297,11 @@ function seedDatabase() {
 }
 
 seedDatabase();
+
+try {
+  db.prepare('ALTER TABLE questions ADD COLUMN type TEXT DEFAULT "coding"').run();
+} catch (err) {
+  // Ignore if column already exists
+}
 
 module.exports = db;

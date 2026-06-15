@@ -16,6 +16,8 @@ export default function useConfigurationSync() {
   const [form, setForm] = useState({
     dailyGoal: '2',
     weeklyGoal: '10',
+    sdDailyGoal: '1',
+    sdWeeklyGoal: '3',
     srsLevel1: '1',
     srsLevel2: '3',
     srsLevel3: '7',
@@ -45,6 +47,8 @@ export default function useConfigurationSync() {
         ...prev,
         dailyGoal: settings.dailyGoal || '2',
         weeklyGoal: settings.weeklyGoal || '10',
+        sdDailyGoal: settings.sdDailyGoal || '1',
+        sdWeeklyGoal: settings.sdWeeklyGoal || '3',
         srsLevel1: settings.srsLevel1 || '1',
         srsLevel2: settings.srsLevel2 || '3',
         srsLevel3: settings.srsLevel3 || '7',

@@ -20,6 +20,7 @@ const defaultFilters = () => ({
   starredOnly: false,
   reviseFilter: false,
   trackerMode: false,
+  type: 'coding',
   sortBy: '',
   sortDirection: 'asc',
   page: 1,
@@ -48,12 +49,17 @@ const createFiltersSlice = (set, get) => {
     },
 
     resetToTrackerMode: () => {
-      set({ filters: { ...defaultFilters(), trackerMode: true } });
+      set({ filters: { ...defaultFilters(), trackerMode: true, type: 'coding' } });
+      get().fetchQuestions();
+    },
+
+    resetToSystemDesignTrackerMode: () => {
+      set({ filters: { ...defaultFilters(), trackerMode: true, type: 'system-design' } });
       get().fetchQuestions();
     },
 
     resetToExploreMode: () => {
-      set({ filters: { ...defaultFilters(), trackerMode: false } });
+      set({ filters: { ...defaultFilters(), trackerMode: false, type: 'coding' } });
       get().fetchQuestions();
     },
 
@@ -166,6 +172,8 @@ const createStatsSlice = (set) => ({
     maxStreak: 0,
     weeklyCount: 0,
     dailyCount: 0,
+    sdWeeklyCount: 0,
+    sdDailyCount: 0,
     activityTimeline: null,
   },
 
@@ -187,6 +195,8 @@ const createStatsSlice = (set) => ({
           maxStreak: data.maxStreak || 0,
           weeklyCount: data.weeklyCount || 0,
           dailyCount: data.dailyCount || 0,
+          sdWeeklyCount: data.sdWeeklyCount || 0,
+          sdDailyCount: data.sdDailyCount || 0,
           activityTimeline: data.activityTimeline || null,
           recentActivity: data.recentActivity || [],
           upcomingRevisions: data.upcomingRevisions || [],
@@ -217,6 +227,8 @@ const createStatsSlice = (set) => ({
           maxStreak: data.maxStreak || 0,
           weeklyCount: data.weeklyCount || 0,
           dailyCount: data.dailyCount || 0,
+          sdWeeklyCount: data.sdWeeklyCount || 0,
+          sdDailyCount: data.sdDailyCount || 0,
           activityTimeline: data.activityTimeline || null,
           recentActivity: data.recentActivity || [],
           upcomingRevisions: data.upcomingRevisions || [],
@@ -237,6 +249,8 @@ const createUtilitiesSlice = (set, get) => ({
   settings: {
     dailyGoal: '2',
     weeklyGoal: '10',
+    sdDailyGoal: '1',
+    sdWeeklyGoal: '3',
     srsLevel1: '1',
     srsLevel2: '3',
     srsLevel3: '7',

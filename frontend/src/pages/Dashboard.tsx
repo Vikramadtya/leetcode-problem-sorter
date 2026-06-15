@@ -13,6 +13,7 @@ import {
 } from '../components/charts';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
+import { formatChartData } from '../lib/statsUtils';
 import styles from './Dashboard.module.css';
 
 
@@ -69,17 +70,7 @@ export default function Dashboard() {
     );
   }
 
-  const difficultyData = [
-    { name: 'Easy', value: analytics.difficultyBreakdown?.Easy || 0 },
-    { name: 'Medium', value: analytics.difficultyBreakdown?.Medium || 0 },
-    { name: 'Hard', value: analytics.difficultyBreakdown?.Hard || 0 },
-  ];
-
-  const statusData = [
-    { name: 'Solved', value: totalSolved },
-    { name: 'Attempted', value: totalAttempted - totalSolved },
-    { name: 'Unsolved', value: Math.max(0, (analytics.totalQuestions || 0) - totalAttempted) },
-  ];
+  const { difficultyData, statusData } = formatChartData(analytics);
 
   return (
     <div className={styles.container}>

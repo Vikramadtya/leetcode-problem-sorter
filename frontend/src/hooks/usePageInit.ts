@@ -16,9 +16,10 @@ import { useAppStore } from '../store/useAppStore';
  *                                   close any open modals).
  */
 export function usePageInit(mode, { onEscape } = {}) {
-  const { resetToTrackerMode, resetToExploreMode, fetchUtilities, fetchLightStats } = useAppStore(
+  const { resetToTrackerMode, resetToSystemDesignTrackerMode, resetToExploreMode, fetchUtilities, fetchLightStats } = useAppStore(
     useShallow((state) => ({
       resetToTrackerMode: state.resetToTrackerMode,
+      resetToSystemDesignTrackerMode: state.resetToSystemDesignTrackerMode,
       resetToExploreMode: state.resetToExploreMode,
       fetchUtilities: state.fetchUtilities,
       fetchLightStats: state.fetchLightStats,
@@ -34,6 +35,8 @@ export function usePageInit(mode, { onEscape } = {}) {
 
     if (mode === 'tracker') {
       resetToTrackerMode();
+    } else if (mode === 'system-design-tracker') {
+      resetToSystemDesignTrackerMode();
     } else {
       resetToExploreMode();
     }

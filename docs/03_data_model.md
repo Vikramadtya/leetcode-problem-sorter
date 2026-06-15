@@ -1,12 +1,12 @@
 # 03 — Data Model
 
-This document describes every data structure in the system — the in-memory shapes, JSON files, API response shapes, and the future PostgreSQL schema.
+This document describes every data structure in the system — the in-memory shapes, SQLite database, API response shapes, and the future PostgreSQL schema.
 
 ---
 
 ## 1. Global Question (in-memory, mock server)
 
-Built from `global_questions.json` at startup. **Never mutated after load.**
+Built from `SQLite tacker.db` at startup. **Never mutated after load.**
 
 ```typescript
 interface Question {
@@ -23,7 +23,7 @@ interface Question {
 }
 ```
 
-**Source file format (`global_questions.json`):**
+**Source file format (`SQLite tacker.db`):**
 ```json
 {
   "ID": "1",
@@ -40,7 +40,7 @@ interface Question {
 
 ---
 
-## 2. Progress Record (in-memory + `user_progress.json`)
+## 2. Progress Record (in-memory + `SQLite tacker.db (progress table)`)
 
 One record per question the user has interacted with.
 

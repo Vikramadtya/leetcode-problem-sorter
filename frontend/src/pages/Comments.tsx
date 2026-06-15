@@ -25,6 +25,7 @@ export default function CommentsPage() {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [typeFilter, setTypeFilter] = useState('coding'); // 'all', 'coding', 'system-design'
 
   // Editing state
   const [editingId, setEditingId] = useState(null);
@@ -46,15 +47,19 @@ export default function CommentsPage() {
       .finally(() => setLoading(false));
   }, [status]);
 
-  // Group comments by question ID
+  // Group comments by question ID and filter by type
   const groupedComments = useMemo(() => {
     const groups = {};
     for (const c of comments) {
+      if (typeFilter !== 'all' && c.questionType !== typeFilter) {
+        continue;
+      }
       if (!groups[c.question_id]) {
         groups[c.question_id] = {
           questionId: c.question_id,
           questionTitle: c.questionTitle || c.question_id,
           questionDifficulty: c.questionDifficulty,
+          questionType: c.questionType,
           questionUrl: c.questionUrl,
           platformId: c.platformId,
           comments: [],
@@ -63,7 +68,7 @@ export default function CommentsPage() {
       groups[c.question_id].comments.push(c);
     }
     return Object.values(groups);
-  }, [comments]);
+  }, [comments, typeFilter]);
 
   if (status === 'loading' || status === 'unauthenticated') return null;
 
@@ -125,8 +130,32 @@ export default function CommentsPage() {
       <Header authEnabled={true} />
       <main className={styles.container}>
         <div className={styles.header}>
-          <h1 className={styles.title}>Your Comments</h1>
-          <p className={styles.subtitle}>All your notes and comments across every question.</p>
+          <div className={styles.headerContent}>
+            <h1 className={styles.title}>Your Comments</h1>
+            <p className={styles.subtitle}>All your notes and comments across every question.</p>
+          </div>
+          <div className={styles.filters}>
+            <div className={styles.segmentedControl}>
+              <button
+                className={`${styles.segmentBtn} ${typeFilter === 'coding' ? styles.activeSegment : ''}`}
+                onClick={() => setTypeFilter('coding')}
+              >
+                Coding
+              </button>
+              <button
+                className={`${styles.segmentBtn} ${typeFilter === 'system-design' ? styles.activeSegment : ''}`}
+                onClick={() => setTypeFilter('system-design')}
+              >
+                System Design
+              </button>
+              <button
+                className={`${styles.segmentBtn} ${typeFilter === 'all' ? styles.activeSegment : ''}`}
+                onClick={() => setTypeFilter('all')}
+              >
+                All
+              </button>
+            </div>
+          </div>
         </div>
 
         {loading ? (

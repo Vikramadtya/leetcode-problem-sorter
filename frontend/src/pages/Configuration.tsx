@@ -138,6 +138,40 @@ export default function ConfigurationPage() {
                     required
                   />
                 </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="sdDailyGoal" className={styles.label}>
+                    System Design Daily Goal
+                  </label>
+                  <p className={styles.hint}>SD problems to solve each day.</p>
+                  <input
+                    id="sdDailyGoal"
+                    name="sdDailyGoal"
+                    type="number"
+                    min="1"
+                    max="50"
+                    className={styles.input}
+                    value={form.sdDailyGoal}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="sdWeeklyGoal" className={styles.label}>
+                    System Design Weekly Goal
+                  </label>
+                  <p className={styles.hint}>SD problems to solve each week.</p>
+                  <input
+                    id="sdWeeklyGoal"
+                    name="sdWeeklyGoal"
+                    type="number"
+                    min="1"
+                    max="200"
+                    className={styles.input}
+                    value={form.sdWeeklyGoal}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
               </div>
             </div>
 

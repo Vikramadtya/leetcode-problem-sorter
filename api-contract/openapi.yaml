@@ -148,6 +148,11 @@ components:
           type: boolean
           default: false
           description: True if this was added by the user via POST /custom-questions
+        type:
+          type: string
+          enum: [coding, system-design]
+          default: coding
+          description: Category of the question
         commentsCount:
           type: integer
           default: 0
@@ -478,6 +483,11 @@ components:
       type: object
       required: [title]
       properties:
+        type:
+          type: string
+          enum: [coding, system-design]
+          default: coding
+          description: Categorize the custom question.
         platformId:
           type: string
           nullable: true
@@ -973,6 +983,13 @@ paths:
           schema:
             type: string
             enum: ['true', 'false']
+        - name: type
+          in: query
+          description: Filter questions by category
+          schema:
+            type: string
+            enum: [coding, system-design]
+            default: coding
         - name: trackerMode
           in: query
           description: >

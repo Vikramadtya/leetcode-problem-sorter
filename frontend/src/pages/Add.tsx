@@ -24,6 +24,7 @@ const AddFormSchema = z.object({
   confidenceLevel: z.string().optional(),
   timeTaken: z.string().optional(),
   tags: z.array(z.string()).default([]),
+  type: z.enum(['coding', 'system-design']).default('coding'),
 });
 
 export default function AddProblem() {
@@ -60,6 +61,7 @@ export default function AddProblem() {
       confidenceLevel: '',
       timeTaken: '',
       tags: [],
+      type: 'coding',
     },
   });
 
@@ -109,6 +111,7 @@ export default function AddProblem() {
         confidenceLevel: data.confidenceLevel ? parseInt(data.confidenceLevel, 10) : null,
         timeTaken: data.timeTaken ? parseInt(data.timeTaken, 10) : null,
         tags: data.tags,
+        type: data.type,
       })
       .then((res) => {
         if (res?.success || res?.question) {
@@ -155,6 +158,18 @@ export default function AddProblem() {
 
           <form onSubmit={handleSubmit(onSubmit)} className={styles.formCard}>
             <div className={styles.formRow}>
+              <div className={styles.formGroup} style={{ flexDirection: 'row', gap: '1rem', alignItems: 'center' }}>
+                <label className={styles.label} style={{ margin: 0 }}>Type:</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input type="radio" value="coding" {...register('type')} /> Coding
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input type="radio" value="system-design" {...register('type')} /> System Design
+                </label>
+              </div>
+            </div>
+
+            <div className={styles.formRow}>
               <div className={styles.formGroup}>
                 <label className={styles.label}>ID (Optional)</label>
                 <input
@@ -197,43 +212,47 @@ export default function AddProblem() {
                   ))}
                 </select>
               </div>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Platform</label>
-                <select
-                  className={styles.select}
-                  {...register('platform')}
-                  onChange={(e) => {
-                    if (e.target.value === '___NEW___') {
-                      setShowPlatformModal(true);
-                      setValue('platform', utilities.platforms[0]?.name || 'Custom'); // reset temp
-                    } else {
-                      setValue('platform', e.target.value);
-                    }
-                  }}
-                >
-                  {utilities.platforms.length === 0 && <option value="Custom">Custom</option>}
-                  {utilities.platforms.map((p: any) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                  <option value="___NEW___">+ Add New Platform</option>
-                </select>
-              </div>
+              {watch('type') !== 'system-design' && (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Platform</label>
+                  <select
+                    className={styles.select}
+                    {...register('platform')}
+                    onChange={(e) => {
+                      if (e.target.value === '___NEW___') {
+                        setShowPlatformModal(true);
+                        setValue('platform', utilities.platforms[0]?.name || 'Custom'); // reset temp
+                      } else {
+                        setValue('platform', e.target.value);
+                      }
+                    }}
+                  >
+                    {utilities.platforms.length === 0 && <option value="Custom">Custom</option>}
+                    {utilities.platforms.map((p: any) => (
+                      <option key={p.id} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                    <option value="___NEW___">+ Add New Platform</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className={styles.formRow}>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Pattern</label>
-                <select className={styles.select} {...register('pattern')}>
-                  <option value="">None / Unknown</option>
-                  {utilities.patterns.map((p: any) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {watch('type') !== 'system-design' && (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Pattern</label>
+                  <select className={styles.select} {...register('pattern')}>
+                    <option value="">None / Unknown</option>
+                    {utilities.patterns.map((p: any) => (
+                      <option key={p.id} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className={styles.formGroup}>
                 <label className={styles.label}>Confidence Level</label>
                 <select className={styles.select} {...register('confidenceLevel')}>

@@ -31,6 +31,7 @@ import { usePageInit } from '../hooks/usePageInit';
 import { useModalHandlers } from '../hooks/useModalHandlers';
 import { useFilterHandlers } from '../hooks/useFilterHandlers';
 import { useAppStore } from '../store/useAppStore';
+import { isWeeklyWrapUpTime } from '../lib/dateUtils';
 import styles from '../pages/Tracker.module.css';
 
 import Header from './Header';
@@ -72,6 +73,7 @@ export default function TrackerPageShell({
     stats,
     fetchLightStats,
     resetToTrackerMode,
+    resetToSystemDesignTrackerMode,
     resetToExploreMode,
     openFlashcards,
     updateProgress,
@@ -87,6 +89,7 @@ export default function TrackerPageShell({
       stats: state.stats,
       fetchLightStats: state.fetchLightStats,
       resetToTrackerMode: state.resetToTrackerMode,
+      resetToSystemDesignTrackerMode: state.resetToSystemDesignTrackerMode,
       resetToExploreMode: state.resetToExploreMode,
       openFlashcards: state.openFlashcards,
       updateProgress: state.updateProgress,
@@ -106,11 +109,9 @@ export default function TrackerPageShell({
 
   useEffect(() => {
     if (mode === 'tracker' && !isLoading) {
-      const today = new Date();
-      if (today.getDay() === 1) {
-        // Monday
+      if (isWeeklyWrapUpTime()) {
         const lastSeenStr = localStorage.getItem('wrapUpLastSeen');
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = new Date().toISOString().split('T')[0];
         if (lastSeenStr !== todayStr) {
           setShowWrapUp(true);
         }
@@ -185,7 +186,8 @@ export default function TrackerPageShell({
   } = useFilterHandlers();
 
   // ── Tab ↔ status filter (bidirectional) ────────────────────────────────────
-  const tabLabels = mode === 'tracker' ? TRACKER_TABS : EXPLORE_TABS;
+  const isTrackerMode = mode === 'tracker' || mode === 'system-design-tracker';
+  const tabLabels = isTrackerMode ? TRACKER_TABS : EXPLORE_TABS;
   // Map 'All' -> 'all', 'Solved' -> 'Solved', 'Attempted'/'Unsolved' stay as is
   const tabValues = tabLabels.map((t) => (t.toLowerCase() === 'all' ? 'all' : t));
 
@@ -223,7 +225,7 @@ export default function TrackerPageShell({
     true; // Always show analytics so the user sees their streaks even when starting out
 
   // ── Reset action for error state ──────────────────────────────────────────
-  const handleRetry = mode === 'tracker' ? resetToTrackerMode : resetToExploreMode;
+  const handleRetry = mode === 'tracker' ? resetToTrackerMode : (mode === 'system-design-tracker' ? resetToSystemDesignTrackerMode : resetToExploreMode);
 
   // ── Subtitle ──────────────────────────────────────────────────────────────
   const subtitle =
@@ -417,7 +419,7 @@ export default function TrackerPageShell({
       )}
 
       {/* ── Floating Goal Widget ────────────────────────────────────────────── */}
-      {authEnabled && <FloatingGoalWidget />}
+      {authEnabled && <FloatingGoalWidget mode={mode} />}
     </div>
   );
 }

@@ -40,7 +40,7 @@ The app is in **active development** against the mock server. The production Jav
 
 Current state:
 - ✅ Mock server with all API endpoints and full business logic
-- ✅ Frontend (Next.js) — Tracker, Explore, Dashboard, Add pages
+- ✅ Frontend (Vite) — Tracker, Explore, Dashboard, Add pages
 - ✅ OpenAPI v2.0.0 contract strictly enforced by mock server
 - ⚠️ Several known bugs being tracked in `07_known_issues_and_todos.md`
 - ❌ Java Micronaut backend — skeleton only
